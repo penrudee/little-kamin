@@ -99,8 +99,14 @@ class SyncEngine {
       alert("คัดลอกฐานข้อมูลมายังเครื่องนี้สำเร็จเรียบร้อยแล้ว!");
     }
 
-    // กรณีอัปเดตข้อมูล Realtime ทั่วไป
+    // กรณีอัปเดตข้อมูล Realtime ทั่วไป (ยา / คนไข้ / บิล ที่เพิ่มใหม่)
     if (data.type === "SYNC_DB") {
+      // จุดที่บั๊ก: เดิมไม่มีการบันทึกข้อมูลที่ส่งมาลง IndexedDB เลย
+      // มีแค่ refreshData() ซึ่งอ่านฐานข้อมูล "ในเครื่องตัวเอง" เท่านั้น
+      // จึงทำให้ข้อมูลที่โอนมาไม่ถูกบันทึก และดูเหมือนโอนไม่สำเร็จ
+      if (data.store && data.payload) {
+        await dbEngine.update(data.store, data.payload);
+      }
       if (typeof refreshData === "function") await refreshData();
     }
   }
