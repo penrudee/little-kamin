@@ -454,6 +454,7 @@
                 if (med.frequency.includes("4 ครั้ง") || med.frequency.includes("ทุก 6")) timesPerDay = 4;
                 else if (med.frequency.includes("3 ครั้ง") || med.frequency.includes("ทุก 8")) timesPerDay = 3;
                 else if (med.frequency.includes("2 ครั้ง") || med.frequency.includes("ทุก 12")) timesPerDay = 2;
+                else if (med.frequency.includes("1 ครั้ง") || med.frequency.includes("วันละ 1 ครั้ง")) timesPerDay = 1;
                 else if (med.frequency.includes("ทุก 4 ชั่วโมง")) timesPerDay = 6;
               }
 
