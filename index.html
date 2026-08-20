@@ -245,7 +245,9 @@
         timestamp: new Date().toISOString()
       };
 
-      await dbEngine.add("patient", patientData);
+      const newPatientId = await dbEngine.add("patient", patientData);
+      patientData.id = newPatientId;
+      syncEngine.broadcastData({ type: "SYNC_DB", store: "patient", payload: patientData });
       await refreshData();
       alert(`บันทึกประวัติคนไข้ "${name}" เรียบร้อยแล้ว`);
     }
@@ -315,13 +317,16 @@
     // เพิ่มยาเข้าคลัง
     document.getElementById("addMedForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      await dbEngine.add("medicine", {
+      const medData = {
         trade_name: document.getElementById("mTrade").value,
         generic_name: document.getElementById("mGeneric").value,
         strength: document.getElementById("mStrength").value,
         dose: document.getElementById("mDose").value,
         price: document.getElementById("mPrice").value
-      });
+      };
+      const newMedId = await dbEngine.add("medicine", medData);
+      medData.id = newMedId;
+      syncEngine.broadcastData({ type: "SYNC_DB", store: "medicine", payload: medData });
       e.target.reset();
       await refreshData();
       alert("เพิ่มยาเข้าคลังสำเร็จ!");
@@ -337,8 +342,9 @@
         items: cart
       };
 
-      await dbEngine.add("bill", billData);
-      syncEngine.broadcastData({ type: "SYNC_DB", payload: billData });
+      const newBillId = await dbEngine.add("bill", billData);
+      billData.id = newBillId;
+      syncEngine.broadcastData({ type: "SYNC_DB", store: "bill", payload: billData });
       
       alert("บันทึกการขายสำเร็จ!");
       cart = [];
