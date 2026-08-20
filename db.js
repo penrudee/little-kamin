@@ -1,4 +1,4 @@
-// db.js - SQLite / IndexedDB Local Storage Layer
+// db.js - IndexedDB Local Storage Layer
 class PharmacyDB {
   constructor() {
     this.db = null;
@@ -6,7 +6,7 @@ class PharmacyDB {
 
   async init() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open("PharmacyLocalDB", 2); // เปลี่ยน version เป็น 2
+      const request = indexedDB.open("PharmacyLocalDB", 2);
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains("users")) {
@@ -20,9 +20,6 @@ class PharmacyDB {
         }
         if (!db.objectStoreNames.contains("patient")) {
           db.createObjectStore("patient", { keyPath: "id", autoIncrement: true });
-        }
-        if (!db.objectStoreNames.contains("visit")) {
-          db.createObjectStore("visit", { keyPath: "id", autoIncrement: true });
         }
         if (!db.objectStoreNames.contains("bill")) {
           db.createObjectStore("bill", { keyPath: "id", autoIncrement: true });
@@ -60,6 +57,16 @@ class PharmacyDB {
       const store = tx.objectStore(storeName);
       const req = store.put(data);
       req.onsuccess = () => resolve(req.result);
+    });
+  }
+
+  // เพิ่มฟังก์ชันสำหรับลบข้อมูลตาม ID
+  async delete(storeName, id) {
+    return new Promise((resolve) => {
+      const tx = this.db.transaction(storeName, "readwrite");
+      const store = tx.objectStore(storeName);
+      const req = store.delete(id);
+      req.onsuccess = () => resolve(true);
     });
   }
 }
