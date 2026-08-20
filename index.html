@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ระบบบริหารจัดการร้านยา Local-First POS</title>
+  <title>LittleKaminPOS - Local-First Pharmacy POS</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -12,7 +12,7 @@
   <!-- Nav Menu -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand" href="#">LittleKaminPOS V0.0.1c</a>
+      <a class="navbar-brand" href="#">LittleKaminPOS V0.0.1d</a>
       <div class="navbar-nav me-auto">
         <button class="nav-link btn btn-link" onclick="switchTab('posTab')">1. ขายยา & คำนวณขนาดยาเด็ก</button>
         <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า</button>
@@ -34,7 +34,6 @@
           <div class="card mb-3">
             <div class="card-header bg-info text-white">ข้อมูลคนไข้</div>
             <div class="card-body">
-              <!-- เพิ่ม Event oninput เพื่อให้คำนวณทันทีเมื่อพิมพ์ -->
               <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ชื่อ-นามสกุล (Auto-complete)">
               <datalist id="patientList"></datalist>
               
@@ -63,14 +62,13 @@
           <div class="card">
             <div class="card-header bg-primary text-white">รายการขายยา</div>
             <div class="card-body">
-              <!-- กล่องแจ้งเตือนการคำนวณขนาดยา ย้ายมาไว้ด้านบนให้เห็นชัดเจน -->
-              <div id="doseCalcAlert" class="alert alert-warning d-none fw-bold">
-                <strong>แนะนำขนาดยาเด็ก:</strong> <span id="doseCalcResult"></span>
+              <div id="doseCalcAlert" class="alert alert-info d-none">
+                <h6 class="fw-bold mb-1">ผลการคำนวณขนาดยาเด็ก (Pediatric Dose Calculation):</h6>
+                <div id="doseCalcResult"></div>
               </div>
 
               <div class="row g-2 mb-3">
                 <div class="col-md-5">
-                  <!-- แก้ไข: ใส่ list="medList" และ Event oninput -->
                   <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อยา..." oninput="calculateDose()" onkeypress="handleMedEnter(event)">
                   <datalist id="medList"></datalist>
                 </div>
@@ -114,14 +112,31 @@
           <form id="addMedForm" class="row g-2 mb-3">
             <div class="col-md-2"><input type="text" id="mTrade" class="form-control" placeholder="Trade Name" required></div>
             <div class="col-md-2"><input type="text" id="mGeneric" class="form-control" placeholder="Generic Name" required></div>
-            <div class="col-md-2"><input type="text" id="mStrength" class="form-control" placeholder="Strength (เช่น 250mg/5ml)"></div>
-            <div class="col-md-2"><input type="text" id="mDose" class="form-control" placeholder="Dose Standard (เช่น 10)"></div>
-            <div class="col-md-2"><input type="text" id="mPrice" class="form-control" placeholder="ราคา" required></div>
-            <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">+ บันทึกยา</button></div>
+            <div class="col-md-2"><input type="text" id="mStrength" class="form-control" placeholder="Strength (เช่น 125mg/5ml)" required></div>
+            <div class="col-md-2"><input type="number" step="0.1" id="mDose" class="form-control" placeholder="Dose (mg/kg/day)" required></div>
+            <div class="col-md-2">
+              <select id="mFreq" class="form-select" required>
+                <option value="">--เลือกความถี่--</option>
+                <option value="3 ครั้งต่อวัน">3 ครั้งต่อวัน (ทุก 8 ชม.)</option>
+                <option value="4 ครั้งต่อวัน">4 ครั้งต่อวัน (ทุก 6 ชม.)</option>
+                <option value="2 ครั้งต่อวัน">2 ครั้งต่อวัน (ทุก 12 ชม.)</option>
+                <option value="ทุก 4 ชั่วโมง">ทุก 4 ชั่วโมง (6 ครั้งต่อวัน)</option>
+              </select>
+            </div>
+            <div class="col-md-1"><input type="number" id="mPrice" class="form-control" placeholder="ราคา" required></div>
+            <div class="col-md-1"><button type="submit" class="btn btn-primary w-100">+ เพิ่ม</button></div>
           </form>
-          <table class="table table-striped">
+          <table class="table table-striped align-middle">
             <thead>
-              <tr><th>ID</th><th>Trade Name</th><th>Generic Name</th><th>Strength</th><th>Dose Standard</th><th>ราคา</th></tr>
+              <tr>
+                <th>ID</th>
+                <th>Trade Name</th>
+                <th>Generic Name</th>
+                <th>Strength</th>
+                <th>Dose (mg/kg/day)</th>
+                <th>ความถี่ในการทาน</th>
+                <th>ราคา</th>
+              </tr>
             </thead>
             <tbody id="stockTableBody"></tbody>
           </table>
@@ -152,27 +167,23 @@
     let currentMeds = [];
 
     window.onload = async () => {
-  // ตรวจสอบว่าใน URL มี syncId ติดมาจากการสแกน QR หรือไม่ (ต้องเช็คก่อน redirect ไป login)
-  const urlParams = new URLSearchParams(window.location.search);
-  const syncId = urlParams.get("syncId");
+      if (!sessionStorage.getItem("loggedInUser")) {
+        window.location.href = "login.html";
+        return;
+      }
+      await dbEngine.init();
 
-  if (!sessionStorage.getItem("loggedInUser")) {
-    // ยังไม่ login: ต้องพา syncId ไปด้วย ไม่งั้นสแกน QR แล้วจะกลายเป็น Host ใหม่แทนที่จะเป็น Client
-    window.location.href = syncId ? `login.html?syncId=${syncId}` : "login.html";
-    return;
-  }
-  await dbEngine.init();
+      const urlParams = new URLSearchParams(window.location.search);
+      const syncId = urlParams.get("syncId");
 
-  if (syncId) {
-    // หากสแกนมาจาก QR Code ให้ทำหน้าที่เป็น Client
-    syncEngine.initPeer(false, syncId);
-  } else {
-    // หากเปิดปกติบน PC ให้ทำหน้าที่เป็น Host
-    syncEngine.initPeer(true);
-  }
+      if (syncId) {
+        syncEngine.initPeer(false, syncId);
+      } else {
+        syncEngine.initPeer(true);
+      }
 
-  await refreshData();
-};
+      await refreshData();
+    };
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('d-none'));
@@ -183,17 +194,24 @@
       currentMeds = await dbEngine.getAll("medicine");
       const patients = await dbEngine.getAll("patient");
 
-      // Render Med Datalist & Stock Table
       const medList = document.getElementById("medList");
       const stockTable = document.getElementById("stockTableBody");
       medList.innerHTML = "";
       stockTable.innerHTML = "";
       currentMeds.forEach(m => {
         medList.innerHTML += `<option value="${m.trade_name}">`;
-        stockTable.innerHTML += `<tr><td>${m.id}</td><td>${m.trade_name}</td><td>${m.generic_name}</td><td>${m.strength || '-'}</td><td>${m.dose || '-'} mg/kg/day</td><td>${m.price}</td></tr>`;
+        stockTable.innerHTML += `
+          <tr>
+            <td>${m.id}</td>
+            <td><strong>${m.trade_name}</strong></td>
+            <td>${m.generic_name}</td>
+            <td><span class="badge bg-secondary">${m.strength || '-'}</span></td>
+            <td>${m.dose || '-'} mg/kg/day</td>
+            <td>${m.frequency || '-'}</td>
+            <td>${m.price} บาท</td>
+          </tr>`;
       });
 
-      // Render Patient Datalist & Patient Table
       const patList = document.getElementById("patientList");
       const patTable = document.getElementById("patientTableBody");
       patList.innerHTML = "";
@@ -204,20 +222,56 @@
       });
     }
 
-    // ฟังก์ชันคำนวณขนาดยาเด็ก (ยืดหยุ่น ยึดตามชื่อยาในช่องกรอก หรือตัวสุดท้ายที่เลือก)
+    // ฟังก์ชันคำนวณขนาดยาเด็ก แปลงเป็นหน่วย ml และ ml/มื้อ
     function calculateDose() {
       const age = parseFloat(document.getElementById("posAge").value) || 0;
       const weight = parseFloat(document.getElementById("posWeight").value) || 0;
       const medName = document.getElementById("posMedName").value;
       const alertBox = document.getElementById("doseCalcAlert");
+      const resultDiv = document.getElementById("doseCalcResult");
 
       if (age < 12 && weight > 0 && medName) {
         const med = currentMeds.find(m => m.trade_name.toLowerCase().trim() === medName.toLowerCase().trim());
-        if (med) {
-          const baseDose = parseFloat(med.dose) || 10; // ค่ามาตรฐาน 10mg/kg/day หากไม่ได้ตั้งค่าไว้
-          const calculatedDose = (weight * baseDose).toFixed(1);
+        
+        // คำนวณทันทีเมื่อมียา และระบุค่า mg/kg/day (dose) ไว้
+        if (med && med.dose) {
+          const dosePerKgDay = parseFloat(med.dose);
+          const totalMgPerDay = weight * dosePerKgDay;
+
+          // ดึงค่า mg และ ml จากความเข้มข้น (เช่น "250mg/5ml" หรือ "125 mg / 5 ml")
+          let mlPerDayText = "";
+          let mlPerDoseText = "";
           
-          document.getElementById("doseCalcResult").innerText = `${med.trade_name} (${med.strength || 'ไม่ระบุความเข้มข้น'}): ขนาดยาแนะนำสำหรับเด็กหนัก ${weight} kg คือ ${calculatedDose} mg/วัน`;
+          if (med.strength) {
+            const match = med.strength.match(/(\d+)\s*mg\s*\/\s*(\d+)\s*ml/i);
+            if (match) {
+              const mgConcentration = parseFloat(match[1]);
+              const mlConcentration = parseFloat(match[2]);
+              
+              // คำนวณเป็น ml ต่อวัน
+              const totalMlPerDay = (totalMgPerDay * mlConcentration) / mgConcentration;
+              mlPerDayText = `${totalMlPerDay.toFixed(2)} ml/วัน`;
+
+              // คำนวณ ml ต่อมื้อตามความถี่
+              let timesPerDay = 3; // ค่าเริ่มต้น
+              if (med.frequency) {
+                if (med.frequency.includes("4 ครั้ง") || med.frequency.includes("ทุก 6")) timesPerDay = 4;
+                else if (med.frequency.includes("3 ครั้ง") || med.frequency.includes("ทุก 8")) timesPerDay = 3;
+                else if (med.frequency.includes("2 ครั้ง") || med.frequency.includes("ทุก 12")) timesPerDay = 2;
+                else if (med.frequency.includes("ทุก 4 ชั่วโมง")) timesPerDay = 6;
+              }
+
+              const mlPerDose = totalMlPerDay / timesPerDay;
+              mlPerDoseText = `<br>👉 <strong>ขนาดยาต่อมื้อ:</strong> <span class="text-danger fs-5 fw-bold">${mlPerDose.toFixed(2)} ml</span> (${med.frequency || 'วันละ ' + timesPerDay + ' ครั้ง'})`;
+            }
+          }
+
+          resultDiv.innerHTML = `
+            <div>• ยา: <strong>${med.trade_name}</strong> (${med.strength})</div>
+            <div>• กำหนดโดส: <strong>${med.dose} mg/kg/day</strong> | น้ำหนักเด็ก: <strong>${weight} kg</strong></div>
+            <div>• ปริมาณยารวมที่ต้องได้รับ: <strong>${totalMgPerDay.toFixed(1)} mg/วัน</strong> ${mlPerDayText ? '(' + mlPerDayText + ')' : ''}</div>
+            ${mlPerDoseText}
+          `;
           alertBox.classList.remove("d-none");
           return;
         }
@@ -225,7 +279,6 @@
       alertBox.classList.add("d-none");
     }
 
-    // ฟังก์ชันเพิ่มประวัติคนไข้ใหม่ (แก้ปัญหา Error: addNewPatientModal is not defined)
     async function addNewPatientModal() {
       const name = document.getElementById("posPatientName").value;
       const age = document.getElementById("posAge").value;
@@ -246,17 +299,17 @@
         timestamp: new Date().toISOString()
       };
 
-      const newPatientId = await dbEngine.add("patient", patientData);
-      patientData.id = newPatientId;
+      const id = await dbEngine.add("patient", patientData);
+      patientData.id = id;
+
       syncEngine.broadcastData({ type: "SYNC_DB", store: "patient", payload: patientData });
+
       await refreshData();
       alert(`บันทึกประวัติคนไข้ "${name}" เรียบร้อยแล้ว`);
     }
 
     function handleMedEnter(e) {
-      if (e.key === "Enter") {
-        addMedToCart();
-      }
+      if (e.key === "Enter") addMedToCart();
     }
 
     function addMedToCart() {
@@ -281,7 +334,7 @@
 
       renderCart();
       document.getElementById("posMedName").value = "";
-      document.getElementById("doseCalcAlert").classList.add("d-none"); // ซ่อนการคำนวณเมื่อเพิ่มยาลงตารางแล้ว
+      document.getElementById("doseCalcAlert").classList.add("d-none");
     }
 
     function renderCart() {
@@ -315,7 +368,7 @@
       renderCart();
     }
 
-    // เพิ่มยาเข้าคลัง
+    // เพิ่มยาใหม่พร้อม Frequency + Broadcast
     document.getElementById("addMedForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const medData = {
@@ -323,11 +376,15 @@
         generic_name: document.getElementById("mGeneric").value,
         strength: document.getElementById("mStrength").value,
         dose: document.getElementById("mDose").value,
+        frequency: document.getElementById("mFreq").value,
         price: document.getElementById("mPrice").value
       };
-      const newMedId = await dbEngine.add("medicine", medData);
-      medData.id = newMedId;
+
+      const id = await dbEngine.add("medicine", medData);
+      medData.id = id;
+
       syncEngine.broadcastData({ type: "SYNC_DB", store: "medicine", payload: medData });
+
       e.target.reset();
       await refreshData();
       alert("เพิ่มยาเข้าคลังสำเร็จ!");
@@ -343,8 +400,9 @@
         items: cart
       };
 
-      const newBillId = await dbEngine.add("bill", billData);
-      billData.id = newBillId;
+      const id = await dbEngine.add("bill", billData);
+      billData.id = id;
+
       syncEngine.broadcastData({ type: "SYNC_DB", store: "bill", payload: billData });
       
       alert("บันทึกการขายสำเร็จ!");
