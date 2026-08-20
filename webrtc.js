@@ -6,7 +6,18 @@ class SyncEngine {
   }
 
   initPeer(isHost = true, hostIdToConnect = null) {
-    this.peer = new Peer();
+    // ใส่ STUN/TURN Public Servers เพื่อช่วยทะลุ NAT ข้ามเครือข่าย (เช่น Wi-Fi กับ 4G)
+    this.peer = new Peer({
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun2.l.google.com:19302" },
+          { urls: "stun:stun3.l.google.com:19302" },
+          { urls: "stun:stun4.l.google.com:19302" }
+        ]
+      }
+    });
 
     this.peer.on("open", (id) => {
       console.log("My Peer ID:", id);
@@ -17,33 +28,37 @@ class SyncEngine {
       }
     });
 
+    this.peer.on("error", (err) => {
+      console.error("PeerJS Error:", err.type, err);
+      alert("เกิดข้อผิดพลาด WebRTC: " + err.type);
+    });
+
     this.peer.on("connection", (conn) => {
-      this.connections.push(conn);
-      this.updateClientCounter();
-
-      conn.on("open", () => {
-        console.log("Client connected:", conn.peer);
-      });
-
-      conn.on("data", async (data) => {
-        await this.handleIncomingData(conn, data);
-      });
-
-      conn.on("close", () => {
-        this.connections = this.connections.filter((c) => c !== conn);
-        this.updateClientCounter();
-      });
+      this.setupConnectionEvents(conn);
     });
   }
 
   connectToHost(hostId) {
     console.log("Connecting to Host:", hostId);
-    const conn = this.peer.connect(hostId);
+    const conn = this.peer.connect(hostId, { reliable: true });
+    this.setupConnectionEvents(conn);
+  }
 
+  setupConnectionEvents(conn) {
     conn.on("open", () => {
-      this.connections.push(conn);
-      console.log("Connected to Host successfully!");
-      conn.send({ type: "REQUEST_FULL_SYNC" });
+      console.log("Data channel opened with:", conn.peer);
+      
+      // เช็กป้องกันการเพิ่ม Connection ซ้ำ
+      if (!this.connections.some(c => c.peer === conn.peer)) {
+        this.connections.push(conn);
+      }
+      this.updateClientCounter();
+
+      // หากเป็น Client ให้ขอข้อมูลก้อนใหญ่ทันทีที่ต่อติด
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("syncId")) {
+        conn.send({ type: "REQUEST_FULL_SYNC" });
+      }
     });
 
     conn.on("data", async (data) => {
@@ -51,8 +66,13 @@ class SyncEngine {
     });
 
     conn.on("close", () => {
+      console.log("Connection closed with:", conn.peer);
       this.connections = this.connections.filter((c) => c !== conn);
       this.updateClientCounter();
+    });
+
+    conn.on("error", (err) => {
+      console.error("Connection Error:", err);
     });
   }
 
@@ -64,11 +84,14 @@ class SyncEngine {
   }
 
   broadcastData(data) {
-    this.connections.forEach((conn) => conn.send(data));
+    this.connections.forEach((conn) => {
+      if (conn.open) {
+        conn.send(data);
+      }
+    });
   }
 
   async handleIncomingData(conn, data) {
-    // 1. คัดลอกฐานข้อมูลทั้งหมดส่งให้ Client ที่สแกน QR เข้ามา
     if (data.type === "REQUEST_FULL_SYNC") {
       console.log("Sending full database copy to client...");
       const meds = await dbEngine.getAll("medicine");
@@ -81,7 +104,6 @@ class SyncEngine {
       });
     }
 
-    // 2. Client รับชุดข้อมูลเต็มจาก Host ครั้งแรก
     if (data.type === "RESPONSE_FULL_SYNC") {
       console.log("Received full database payload:", data.payload);
       const { meds, patients, bills } = data.payload;
@@ -94,7 +116,6 @@ class SyncEngine {
       alert("คัดลอกฐานข้อมูลมายังเครื่องนี้สำเร็จเรียบร้อยแล้ว!");
     }
 
-    // 3. Generic State Sync (บันทึกข้อมูลลง IndexedDB ทันทีเมื่อมีการเพิ่ม/แก้ไขจากเครื่องอื่น)
     if (data.type === "SYNC_DB") {
       console.log(`Received realtime update for store [${data.store}]:`, data.payload);
       if (data.store && data.payload) {
