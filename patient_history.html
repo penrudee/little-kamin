@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ประวัติการรับยาของคุณ - LittleKaminPOS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body class="bg-light p-3">
+  <div class="container" style="max-width: 600px;">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-primary text-white text-center">
+        <h5 class="mb-0">ประวัติการรับยา / ประวัติคนไข้</h5>
+      </div>
+      <div class="card-body">
+        <div id="patientProfile" class="mb-3">
+          <p class="text-center text-muted">กำลังดึงข้อมูลประวัติคนไข้...</p>
+        </div>
+        <hr>
+        <h6>รายการประวัติการซื้อยา</h6>
+        <div id="historyList">
+          <div class="alert alert-info">กำลังเชื่อมต่อกับฐานข้อมูลร้านยาผ่าน WebRTC...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="db.js"></script>
+  <script>
+    let peer = null;
+    const urlParams = new URLSearchParams(window.location.search);
+    const hostPeerId = urlParams.get("hostId");
+    const patientSpecialId = urlParams.get("patientId");
+
+    window.onload = async () => {
+      await dbEngine.init();
+      
+      // แสดงข้อมูลท้องถิ่นก่อน (ถ้ามี)
+      await renderLocalHistory();
+
+      // หากมี parameter ส่งมาให้เชื่อมต่อ WebRTC ไปขอข้อมูลอัปเดตจากร้านยา
+      if (hostPeerId && patientSpecialId) {
+        connectToPharmacyHost(hostPeerId, patientSpecialId);
+      }
+    };
+
+    async function renderLocalHistory() {
+      const patients = await dbEngine.getAll("patient");
+      const bills = await dbEngine.getAll("bill");
+
+      const patient = patients.find(p => p.patient_special_id === patientSpecialId);
+      if (patient) {
+        document.getElementById("patientProfile").innerHTML = `
+          <h5><strong>ชื่อ-สกุล:</strong> ${patient.full_name}</h5>
+          <div><strong>รหัสประจำตัว:</strong> ${patient.patient_special_id}</div>
+          <div><strong>อายุ:</strong> ${patient.age || '-'} ปี | <strong>น้ำหนัก:</strong> ${patient.weight || '-'} kg</div>
+        `;
+
+        const myBills = bills.filter(b => b.patientSpecialId === patientSpecialId || b.patientName === patient.full_name);
+        const historyContainer = document.getElementById("historyList");
+        
+        if (myBills.length === 0) {
+          historyContainer.innerHTML = `<div class="text-muted">ยังไม่มีประวัติการซื้อยา</div>`;
+          return;
+        }
+
+        historyContainer.innerHTML = myBills.map(b => `
+          <div class="card mb-2">
+            <div class="card-body p-2">
+              <div class="d-flex justify-content-between text-muted small">
+                <span>วันที่: ${new Date(b.timestamp).toLocaleString("th-TH")}</span>
+                <strong class="text-success">${b.total} บาท</strong>
+              </div>
+              <ul class="mb-0 mt-1 pl-3">
+                ${b.items ? b.items.map(i => `<li>${i.name} x ${i.qty}</li>`).join('') : '<li>ไม่ระบุรายการ</li>'}
+              </ul>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    function connectToPharmacyHost(hostId, pId) {
+      peer = new Peer({
+        config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }
+      });
+
+      peer.on("open", () => {
+        const conn = peer.connect(hostId);
+        conn.on("open", () => {
+          // ส่งคำขอข้อมูลเจาะจงเฉพาะรหัสคนไข้นี้
+          conn.send({ type: "REQUEST_PATIENT_HISTORY", patientSpecialId: pId });
+        });
+
+        conn.on("data", async (data) => {
+          if (data.type === "RESPONSE_PATIENT_HISTORY") {
+            const { patient, bills } = data.payload;
+            if (patient) await dbEngine.update("patient", patient);
+            if (bills) {
+              for (let b of bills) await dbEngine.update("bill", b);
+            }
+            await renderLocalHistory();
+          }
+        });
+      });
+    }
+  </script>
+</body>
+</html>
