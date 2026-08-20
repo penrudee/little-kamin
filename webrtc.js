@@ -1,4 +1,4 @@
-// webrtc.js - WebRTC Mesh & Full DB Sync System
+// webrtc.js - WebRTC Mesh & Realtime State Sync System
 class SyncEngine {
   constructor() {
     this.connections = [];
@@ -6,7 +6,6 @@ class SyncEngine {
   }
 
   initPeer(isHost = true, hostIdToConnect = null) {
-    // สร้าง Peer Connection
     this.peer = new Peer();
 
     this.peer.on("open", (id) => {
@@ -14,12 +13,10 @@ class SyncEngine {
       if (isHost && !hostIdToConnect) {
         this.renderQRCode(id);
       } else if (hostIdToConnect) {
-        // กรณีเป็น Client (สแกน QR มา) ให้เชื่อมต่อไปหา Host ทันที
         this.connectToHost(hostIdToConnect);
       }
     });
 
-    // ฝั่ง PC (Host) รอรับการเชื่อมต่อจาก Smartphone/Client
     this.peer.on("connection", (conn) => {
       this.connections.push(conn);
       this.updateClientCounter();
@@ -46,7 +43,6 @@ class SyncEngine {
     conn.on("open", () => {
       this.connections.push(conn);
       console.log("Connected to Host successfully!");
-      // เมื่อเชื่อมต่อติด ให้ร้องขอคัดลอกฐานข้อมูลทั้งหมดทันที
       conn.send({ type: "REQUEST_FULL_SYNC" });
     });
 
@@ -72,7 +68,7 @@ class SyncEngine {
   }
 
   async handleIncomingData(conn, data) {
-    // กรณี PC ถูกร้องขอให้คัดลอกข้อมูลส่งไปให้ Smartphone
+    // 1. คัดลอกฐานข้อมูลทั้งหมดส่งให้ Client ที่สแกน QR เข้ามา
     if (data.type === "REQUEST_FULL_SYNC") {
       console.log("Sending full database copy to client...");
       const meds = await dbEngine.getAll("medicine");
@@ -85,12 +81,11 @@ class SyncEngine {
       });
     }
 
-    // กรณี Smartphone ได้รับชุดข้อมูลจาก PC
+    // 2. Client รับชุดข้อมูลเต็มจาก Host ครั้งแรก
     if (data.type === "RESPONSE_FULL_SYNC") {
       console.log("Received full database payload:", data.payload);
       const { meds, patients, bills } = data.payload;
 
-      // บันทึกลง IndexedDB เครื่อง Smartphone
       for (let m of meds) await dbEngine.update("medicine", m);
       for (let p of patients) await dbEngine.update("patient", p);
       for (let b of bills) await dbEngine.update("bill", b);
@@ -99,15 +94,13 @@ class SyncEngine {
       alert("คัดลอกฐานข้อมูลมายังเครื่องนี้สำเร็จเรียบร้อยแล้ว!");
     }
 
-    // กรณีอัปเดตข้อมูล Realtime ทั่วไป (ยา / คนไข้ / บิล ที่เพิ่มใหม่)
+    // 3. Generic State Sync (บันทึกข้อมูลลง IndexedDB ทันทีเมื่อมีการเพิ่ม/แก้ไขจากเครื่องอื่น)
     if (data.type === "SYNC_DB") {
-      // จุดที่บั๊ก: เดิมไม่มีการบันทึกข้อมูลที่ส่งมาลง IndexedDB เลย
-      // มีแค่ refreshData() ซึ่งอ่านฐานข้อมูล "ในเครื่องตัวเอง" เท่านั้น
-      // จึงทำให้ข้อมูลที่โอนมาไม่ถูกบันทึก และดูเหมือนโอนไม่สำเร็จ
+      console.log(`Received realtime update for store [${data.store}]:`, data.payload);
       if (data.store && data.payload) {
         await dbEngine.update(data.store, data.payload);
+        if (typeof refreshData === "function") await refreshData();
       }
-      if (typeof refreshData === "function") await refreshData();
     }
   }
 
