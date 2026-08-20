@@ -6,7 +6,7 @@ class PharmacyDB {
 
   async init() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open("PharmacyLocalDB", 1);
+      const request = indexedDB.open("PharmacyLocalDB", 2); // เปลี่ยน version เป็น 2
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains("users")) {
@@ -19,9 +19,7 @@ class PharmacyDB {
           medStore.createIndex("trade_name", "trade_name", { unique: false });
         }
         if (!db.objectStoreNames.contains("patient")) {
-          const patStore = db.createObjectStore("patient", { keyPath: "id", autoIncrement: true });
-          patStore.createIndex("full_name", "full_name", { unique: false });
-          patStore.createIndex("patient_special_id", "patient_special_id", { unique: true });
+          db.createObjectStore("patient", { keyPath: "id", autoIncrement: true });
         }
         if (!db.objectStoreNames.contains("visit")) {
           db.createObjectStore("visit", { keyPath: "id", autoIncrement: true });
