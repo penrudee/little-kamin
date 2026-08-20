@@ -7,12 +7,35 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  
+  <style>
+    /* ซ่อนองค์ประกอบสำหรับพิมพ์ในการเปิดหน้าจอปกติ */
+    #printablePatientCard { display: none; }
+
+    /* CSS สำหรับการสั่งพิมพ์บัตรประจำตัวคนไข้ */
+    @media print {
+      body * { visibility: hidden; }
+      #printablePatientCard, #printablePatientCard * { visibility: visible; }
+      #printablePatientCard {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 85mm;
+        height: 54mm;
+        border: 2px solid #000;
+        padding: 10px;
+        border-radius: 8px;
+        background: #fff;
+      }
+    }
+  </style>
 </head>
 <body class="bg-light">
   <!-- Nav Menu -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand" href="#">LittleKaminPOS V0.0.1d</a>
+      <a class="navbar-brand" href="#">LittleKaminPOS V0.0.1E</a>
       <div class="navbar-nav me-auto">
         <button class="nav-link btn btn-link" onclick="switchTab('posTab')">1. ขายยา & คำนวณขนาดยาเด็ก</button>
         <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า</button>
@@ -34,25 +57,33 @@
           <div class="card mb-3">
             <div class="card-header bg-info text-white">ข้อมูลคนไข้</div>
             <div class="card-body">
-              <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ชื่อ-นามสกุล (Auto-complete)">
+              <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ชื่อ-นามสกุล (Auto-complete)" oninput="checkExistingPatient()">
               <datalist id="patientList"></datalist>
               
               <div class="row g-2 mb-2">
                 <div class="col-6"><input type="number" id="posAge" class="form-control" placeholder="อายุ (ปี)" oninput="calculateDose()"></div>
                 <div class="col-6"><input type="number" id="posWeight" class="form-control" placeholder="น้ำหนัก (kg)" oninput="calculateDose()"></div>
               </div>
-              <input type="text" id="posPhone" class="form-control mb-2" placeholder="เบอร์โทรศัพท์">
+              <input type="text" id="posPhone" class="form-control mb-2" placeholder="เบอร์โทรศัพท์" oninput="checkExistingPatient()">
               
-              <button class="btn btn-sm btn-outline-primary w-100" onclick="addNewPatientModal()">+ บันทึกประวัติคนไข้ใหม่</button>
+              <button class="btn btn-sm btn-outline-primary w-100 mb-2" onclick="addNewPatientModal()">+ บันทึกประวัติคนไข้ใหม่</button>
+
+              <!-- กล่องแสดง QR Code เมื่อพบประวัติคนไข้เดิม -->
+              <div id="patientQrBox" class="card card-body bg-light text-center d-none mt-2">
+                <span class="badge bg-success mb-2">พบประวัติคนไข้ในระบบ</span>
+                <div id="patientCardQr" class="d-flex justify-content-center mb-2"></div>
+                <small class="text-muted d-block mb-2" id="patientCodeDisplay"></small>
+                <button class="btn btn-sm btn-dark w-100" onclick="printPatientCard()">🖨️ พิมพ์บัตรประจำตัวคนไข้</button>
+              </div>
             </div>
           </div>
 
-          <!-- Sync WebRTC QR Modal Trigger -->
+          <!-- Sync WebRTC QR -->
           <div class="card">
             <div class="card-header bg-secondary text-white">ซิงค์ฐานข้อมูล (P2P Smartphone)</div>
             <div class="card-body text-center">
               <div id="qrcode" class="d-flex justify-content-center mb-2"></div>
-              <small class="text-muted">สแกนเพื่อคัดลอกฐานข้อมูลไปยัง Smartphone หรือให้คนไข้สแกนดูประวัติ</small>
+              <small class="text-muted">สแกนเพื่อคัดลอกฐานข้อมูลไปยัง Smartphone เครื่องอื่น</small>
             </div>
           </div>
         </div>
@@ -104,7 +135,7 @@
       </div>
     </div>
 
-    <!-- TAB 2: คลังสินค้า (Medicine Store) -->
+    <!-- TAB 2: คลังสินค้า -->
     <div id="stockTab" class="tab-content d-none">
       <div class="card">
         <div class="card-header bg-dark text-white">จัดการคลังสินค้า (Medicine Table)</div>
@@ -144,7 +175,7 @@
       </div>
     </div>
 
-    <!-- TAB 3: ประวัติคนไข้ (Patient) -->
+    <!-- TAB 3: ประวัติคนไข้ -->
     <div id="patientTab" class="tab-content d-none">
       <div class="card">
         <div class="card-header bg-dark text-white">ประวัติคนไข้ (Patient History)</div>
@@ -160,11 +191,28 @@
     </div>
   </div>
 
+  <!-- โครงสร้างบัตรสำหรับสั่งพิมพ์ -->
+  <div id="printablePatientCard">
+    <div style="font-size: 12px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 5px;">
+      บัตรประจำตัวคนไข้ - ร้านยา LittleKaminPOS
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div style="font-size: 11px; line-height: 1.4;">
+        <div><strong>ชื่อ:</strong> <span id="printName"></span></div>
+        <div><strong>อายุ:</strong> <span id="printAge"></span> ปี</div>
+        <div><strong>เบอร์โทร:</strong> <span id="printPhone"></span></div>
+        <div><strong>รหัส:</strong> <span id="printCode"></span></div>
+      </div>
+      <div id="printQrCode"></div>
+    </div>
+  </div>
+
   <script src="db.js"></script>
   <script src="webrtc.js"></script>
   <script>
     let cart = [];
     let currentMeds = [];
+    let currentFoundPatient = null;
 
     window.onload = async () => {
       if (!sessionStorage.getItem("loggedInUser")) {
@@ -222,7 +270,62 @@
       });
     }
 
-    // ฟังก์ชันคำนวณขนาดยาเด็ก แปลงเป็นหน่วย ml และ ml/มื้อ
+    // ตรวจสอบประวัติคนไข้เก่าแบบอัตโนมัติจาก ชื่อ และ เบอร์โทร
+    async function checkExistingPatient() {
+      const name = document.getElementById("posPatientName").value.trim().toLowerCase();
+      const phone = document.getElementById("posPhone").value.trim();
+      const qrBox = document.getElementById("patientQrBox");
+
+      if (!name) {
+        qrBox.classList.add("d-none");
+        currentFoundPatient = null;
+        return;
+      }
+
+      const patients = await dbEngine.getAll("patient");
+      const found = patients.find(p => 
+        p.full_name.toLowerCase() === name && (!phone || p.phone === phone)
+      );
+
+      if (found) {
+        currentFoundPatient = found;
+        document.getElementById("posAge").value = found.age || "";
+        document.getElementById("posWeight").value = found.weight || "";
+        document.getElementById("posPhone").value = found.phone || "";
+        document.getElementById("patientCodeDisplay").innerText = "รหัสคนไข้: " + found.patient_special_id;
+
+        // เจเนอเรต URL สำหรับคนไข้สแกนดูประวัติ
+        const patientHistoryUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}patient_history.html?hostId=${syncEngine.peer ? syncEngine.peer.id : ''}&patientId=${found.patient_special_id}`;
+        
+        const qrContainer = document.getElementById("patientCardQr");
+        qrContainer.innerHTML = "";
+        new QRCode(qrContainer, { text: patientHistoryUrl, width: 100, height: 100 });
+
+        qrBox.classList.remove("d-none");
+        calculateDose();
+      } else {
+        qrBox.classList.add("d-none");
+        currentFoundPatient = null;
+      }
+    }
+
+    // สั่งพิมพ์บัตรประจำตัวคนไข้
+    function printPatientCard() {
+      if (!currentFoundPatient) return;
+
+      document.getElementById("printName").innerText = currentFoundPatient.full_name;
+      document.getElementById("printAge").innerText = currentFoundPatient.age || "-";
+      document.getElementById("printPhone").innerText = currentFoundPatient.phone || "-";
+      document.getElementById("printCode").innerText = currentFoundPatient.patient_special_id;
+
+      const printQr = document.getElementById("printQrCode");
+      printQr.innerHTML = "";
+      const patientHistoryUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}patient_history.html?hostId=${syncEngine.peer ? syncEngine.peer.id : ''}&patientId=${currentFoundPatient.patient_special_id}`;
+      new QRCode(printQr, { text: patientHistoryUrl, width: 80, height: 80 });
+
+      window.print();
+    }
+
     function calculateDose() {
       const age = parseFloat(document.getElementById("posAge").value) || 0;
       const weight = parseFloat(document.getElementById("posWeight").value) || 0;
@@ -232,13 +335,10 @@
 
       if (age < 12 && weight > 0 && medName) {
         const med = currentMeds.find(m => m.trade_name.toLowerCase().trim() === medName.toLowerCase().trim());
-        
-        // คำนวณทันทีเมื่อมียา และระบุค่า mg/kg/day (dose) ไว้
         if (med && med.dose) {
           const dosePerKgDay = parseFloat(med.dose);
           const totalMgPerDay = weight * dosePerKgDay;
 
-          // ดึงค่า mg และ ml จากความเข้มข้น (เช่น "250mg/5ml" หรือ "125 mg / 5 ml")
           let mlPerDayText = "";
           let mlPerDoseText = "";
           
@@ -247,13 +347,10 @@
             if (match) {
               const mgConcentration = parseFloat(match[1]);
               const mlConcentration = parseFloat(match[2]);
-              
-              // คำนวณเป็น ml ต่อวัน
               const totalMlPerDay = (totalMgPerDay * mlConcentration) / mgConcentration;
               mlPerDayText = `${totalMlPerDay.toFixed(2)} ml/วัน`;
 
-              // คำนวณ ml ต่อมื้อตามความถี่
-              let timesPerDay = 3; // ค่าเริ่มต้น
+              let timesPerDay = 3;
               if (med.frequency) {
                 if (med.frequency.includes("4 ครั้ง") || med.frequency.includes("ทุก 6")) timesPerDay = 4;
                 else if (med.frequency.includes("3 ครั้ง") || med.frequency.includes("ทุก 8")) timesPerDay = 3;
@@ -280,7 +377,7 @@
     }
 
     async function addNewPatientModal() {
-      const name = document.getElementById("posPatientName").value;
+      const name = document.getElementById("posPatientName").value.trim();
       const age = document.getElementById("posAge").value;
       const weight = document.getElementById("posWeight").value;
       const phone = document.getElementById("posPhone").value;
@@ -305,6 +402,7 @@
       syncEngine.broadcastData({ type: "SYNC_DB", store: "patient", payload: patientData });
 
       await refreshData();
+      await checkExistingPatient();
       alert(`บันทึกประวัติคนไข้ "${name}" เรียบร้อยแล้ว`);
     }
 
@@ -368,7 +466,6 @@
       renderCart();
     }
 
-    // เพิ่มยาใหม่พร้อม Frequency + Broadcast
     document.getElementById("addMedForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const medData = {
@@ -396,6 +493,7 @@
       const billData = {
         total: document.getElementById("grandTotal").innerText,
         patientName: document.getElementById("posPatientName").value,
+        patientSpecialId: currentFoundPatient ? currentFoundPatient.patient_special_id : null,
         timestamp: new Date().toISOString(),
         items: cart
       };
