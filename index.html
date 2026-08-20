@@ -12,7 +12,7 @@
   <!-- Nav Menu -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand" href="#">PharmaPOS</a>
+      <a class="navbar-brand" href="#">LittleKaminPOS</a>
       <div class="navbar-nav me-auto">
         <button class="nav-link btn btn-link" onclick="switchTab('posTab')">1. ขายยา & คำนวณขนาดยาเด็ก</button>
         <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า</button>
@@ -34,16 +34,17 @@
           <div class="card mb-3">
             <div class="card-header bg-info text-white">ข้อมูลคนไข้</div>
             <div class="card-body">
+              <!-- เพิ่ม Event oninput เพื่อให้คำนวณทันทีเมื่อพิมพ์ -->
               <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ชื่อ-นามสกุล (Auto-complete)">
               <datalist id="patientList"></datalist>
               
               <div class="row g-2 mb-2">
-                <div class="col-6"><input type="number" id="posAge" class="form-control" placeholder="อายุ (ปี)" onchange="calculateDose()"></div>
-                <div class="col-6"><input type="number" id="posWeight" class="form-control" placeholder="น้ำหนัก (kg)" onchange="calculateDose()"></div>
+                <div class="col-6"><input type="number" id="posAge" class="form-control" placeholder="อายุ (ปี)" oninput="calculateDose()"></div>
+                <div class="col-6"><input type="number" id="posWeight" class="form-control" placeholder="น้ำหนัก (kg)" oninput="calculateDose()"></div>
               </div>
               <input type="text" id="posPhone" class="form-control mb-2" placeholder="เบอร์โทรศัพท์">
               
-              <button class="btn btn-sm btn-outline-primary w-100" onclick="addNewPatientModal()">+ เพิ่มประวัติคนไข้ใหม่</button>
+              <button class="btn btn-sm btn-outline-primary w-100" onclick="addNewPatientModal()">+ บันทึกประวัติคนไข้ใหม่</button>
             </div>
           </div>
 
@@ -62,21 +63,23 @@
           <div class="card">
             <div class="card-header bg-primary text-white">รายการขายยา</div>
             <div class="card-body">
+              <!-- กล่องแจ้งเตือนการคำนวณขนาดยา ย้ายมาไว้ด้านบนให้เห็นชัดเจน -->
+              <div id="doseCalcAlert" class="alert alert-warning d-none fw-bold">
+                <strong>แนะนำขนาดยาเด็ก:</strong> <span id="doseCalcResult"></span>
+              </div>
+
               <div class="row g-2 mb-3">
                 <div class="col-md-5">
-                  <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อยา..." onkeypress="handleMedEnter(event)">
+                  <!-- แก้ไข: ใส่ list="medList" และ Event oninput -->
+                  <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อยา..." oninput="calculateDose()" onkeypress="handleMedEnter(event)">
                   <datalist id="medList"></datalist>
                 </div>
                 <div class="col-md-3">
-                  <input type="number" id="posQty" class="form-control" value="1" placeholder="จำนวน" onchange="calculateDose()">
+                  <input type="number" id="posQty" class="form-control" value="1" placeholder="จำนวน" oninput="calculateDose()">
                 </div>
                 <div class="col-md-4">
                   <button class="btn btn-success w-100" onclick="addMedToCart()">เพิ่มรายการ</button>
                 </div>
-              </div>
-
-              <div id="doseCalcAlert" class="alert alert-warning d-none">
-                <strong>แนะนำขนาดยาเด็ก:</strong> <span id="doseCalcResult"></span>
               </div>
 
               <!-- Cart Table -->
@@ -111,8 +114,8 @@
           <form id="addMedForm" class="row g-2 mb-3">
             <div class="col-md-2"><input type="text" id="mTrade" class="form-control" placeholder="Trade Name" required></div>
             <div class="col-md-2"><input type="text" id="mGeneric" class="form-control" placeholder="Generic Name" required></div>
-            <div class="col-md-2"><input type="text" id="mStrength" class="form-control" placeholder="Strength (เช่น 250mg/5cc)"></div>
-            <div class="col-md-2"><input type="text" id="mDose" class="form-control" placeholder="Dose (10mg/kg/day)"></div>
+            <div class="col-md-2"><input type="text" id="mStrength" class="form-control" placeholder="Strength (เช่น 250mg/5ml)"></div>
+            <div class="col-md-2"><input type="text" id="mDose" class="form-control" placeholder="Dose Standard (เช่น 10)"></div>
             <div class="col-md-2"><input type="text" id="mPrice" class="form-control" placeholder="ราคา" required></div>
             <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">+ บันทึกยา</button></div>
           </form>
@@ -133,7 +136,7 @@
         <div class="card-body">
           <table class="table table-striped">
             <thead>
-              <tr><th>ID</th><th>ชื่อ-นามสกุล</th><th>ประวัติแพ้ยา</th><th>โรคประจำตัว</th><th>ความดัน</th><th>อุณหภูมิ</th><th>Special QR ID</th></tr>
+              <tr><th>ID</th><th>ชื่อ-นามสกุล</th><th>อายุ</th><th>เบอร์โทร</th><th>น้ำหนัก</th><th>Special QR ID</th></tr>
             </thead>
             <tbody id="patientTableBody"></tbody>
           </table>
@@ -174,7 +177,7 @@
       stockTable.innerHTML = "";
       currentMeds.forEach(m => {
         medList.innerHTML += `<option value="${m.trade_name}">`;
-        stockTable.innerHTML += `<tr><td>${m.id}</td><td>${m.trade_name}</td><td>${m.generic_name}</td><td>${m.strength || '-'}</td><td>${m.dose || '-'}</td><td>${m.price}</td></tr>`;
+        stockTable.innerHTML += `<tr><td>${m.id}</td><td>${m.trade_name}</td><td>${m.generic_name}</td><td>${m.strength || '-'}</td><td>${m.dose || '-'} mg/kg/day</td><td>${m.price}</td></tr>`;
       });
 
       // Render Patient Datalist & Patient Table
@@ -184,11 +187,11 @@
       patTable.innerHTML = "";
       patients.forEach(p => {
         patList.innerHTML += `<option value="${p.full_name}">`;
-        patTable.innerHTML += `<tr><td>${p.id}</td><td>${p.full_name}</td><td>${p.allergy || '-'}</td><td>${p.disease || '-'}</td><td>${p.bp || '-'}</td><td>${p.temp || '-'}</td><td>${p.patient_special_id}</td></tr>`;
+        patTable.innerHTML += `<tr><td>${p.id}</td><td>${p.full_name}</td><td>${p.age || '-'}</td><td>${p.phone || '-'}</td><td>${p.weight || '-'} kg</td><td>${p.patient_special_id}</td></tr>`;
       });
     }
 
-    // คำนวณขนาดยาเด็กอัตโนมัติ (คำนวณจากน้ำหนักและอายุ < 12 ปี)
+    // ฟังก์ชันคำนวณขนาดยาเด็ก (ยืดหยุ่น ยึดตามชื่อยาในช่องกรอก หรือตัวสุดท้ายที่เลือก)
     function calculateDose() {
       const age = parseFloat(document.getElementById("posAge").value) || 0;
       const weight = parseFloat(document.getElementById("posWeight").value) || 0;
@@ -196,16 +199,43 @@
       const alertBox = document.getElementById("doseCalcAlert");
 
       if (age < 12 && weight > 0 && medName) {
-        const med = currentMeds.find(m => m.trade_name.toLowerCase() === medName.toLowerCase());
-        if (med && med.dose) {
-          // สมมติการคำนวณเบื้องต้น 10mg/kg/day
-          const calculatedDose = (weight * 10).toFixed(1);
-          document.getElementById("doseCalcResult").innerText = `${med.trade_name} สำหรับเด็กน้ำหนัก ${weight} kg คือประมาณ ${calculatedDose} mg/วัน (${med.strength || 'ตามฉลาก'})`;
+        const med = currentMeds.find(m => m.trade_name.toLowerCase().trim() === medName.toLowerCase().trim());
+        if (med) {
+          const baseDose = parseFloat(med.dose) || 10; // ค่ามาตรฐาน 10mg/kg/day หากไม่ได้ตั้งค่าไว้
+          const calculatedDose = (weight * baseDose).toFixed(1);
+          
+          document.getElementById("doseCalcResult").innerText = `${med.trade_name} (${med.strength || 'ไม่ระบุความเข้มข้น'}): ขนาดยาแนะนำสำหรับเด็กหนัก ${weight} kg คือ ${calculatedDose} mg/วัน`;
           alertBox.classList.remove("d-none");
           return;
         }
       }
       alertBox.classList.add("d-none");
+    }
+
+    // ฟังก์ชันเพิ่มประวัติคนไข้ใหม่ (แก้ปัญหา Error: addNewPatientModal is not defined)
+    async function addNewPatientModal() {
+      const name = document.getElementById("posPatientName").value;
+      const age = document.getElementById("posAge").value;
+      const weight = document.getElementById("posWeight").value;
+      const phone = document.getElementById("posPhone").value;
+
+      if (!name) {
+        alert("กรุณากรอกชื่อ-นามสกุล คนไข้");
+        return;
+      }
+
+      const patientData = {
+        full_name: name,
+        age: age,
+        weight: weight,
+        phone: phone,
+        patient_special_id: "PAT-" + Math.floor(1000 + Math.random() * 9000),
+        timestamp: new Date().toISOString()
+      };
+
+      await dbEngine.add("patient", patientData);
+      await refreshData();
+      alert(`บันทึกประวัติคนไข้ "${name}" เรียบร้อยแล้ว`);
     }
 
     function handleMedEnter(e) {
@@ -217,7 +247,7 @@
     function addMedToCart() {
       const name = document.getElementById("posMedName").value;
       const qty = parseInt(document.getElementById("posQty").value) || 1;
-      const med = currentMeds.find(m => m.trade_name.toLowerCase() === name.toLowerCase());
+      const med = currentMeds.find(m => m.trade_name.toLowerCase().trim() === name.toLowerCase().trim());
 
       if (!med) {
         if (confirm(`ยังไม่มียา "${name}" ในคลัง ต้องการไปที่หน้าคลังเพื่อเพิ่มยาหรือไม่?`)) {
@@ -236,6 +266,7 @@
 
       renderCart();
       document.getElementById("posMedName").value = "";
+      document.getElementById("doseCalcAlert").classList.add("d-none"); // ซ่อนการคำนวณเมื่อเพิ่มยาลงตารางแล้ว
     }
 
     function renderCart() {
@@ -250,7 +281,7 @@
           <tr>
             <td>${item.name}</td>
             <td>${item.price.toFixed(2)}</td>
-            <td><input type="number" value="${item.qty}" min="1" class="form-control form-control-sm" style="width:80px;" onchange="updateCartQty(${idx}, this.value)"></td>
+            <td><input type="number" value="${item.qty}" min="1" class="form-control form-control-sm" style="width:80px;" oninput="updateCartQty(${idx}, this.value)"></td>
             <td>${total.toFixed(2)}</td>
             <td><button class="btn btn-sm btn-danger" onclick="removeCartItem(${idx})">ลบ</button></td>
           </tr>
@@ -289,6 +320,7 @@
       
       const billData = {
         total: document.getElementById("grandTotal").innerText,
+        patientName: document.getElementById("posPatientName").value,
         timestamp: new Date().toISOString(),
         items: cart
       };
