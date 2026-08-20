@@ -1,4 +1,4 @@
-// webrtc.js - WebRTC Mesh & Realtime State Sync System
+// webrtc.js - WebRTC Mesh & Full DB Sync System
 class SyncEngine {
   constructor() {
     this.connections = [];
@@ -6,59 +6,48 @@ class SyncEngine {
   }
 
   initPeer(isHost = true, hostIdToConnect = null) {
-    // ใส่ STUN/TURN Public Servers เพื่อช่วยทะลุ NAT ข้ามเครือข่าย (เช่น Wi-Fi กับ 4G)
-    this.peer = new Peer({
-      config: {
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:stun2.l.google.com:19302" },
-          { urls: "stun:stun3.l.google.com:19302" },
-          { urls: "stun:stun4.l.google.com:19302" }
-        ]
-      }
-    });
+    // สร้าง Peer Connection
+    this.peer = new Peer();
 
     this.peer.on("open", (id) => {
       console.log("My Peer ID:", id);
       if (isHost && !hostIdToConnect) {
         this.renderQRCode(id);
       } else if (hostIdToConnect) {
+        // กรณีเป็น Client (สแกน QR มา) ให้เชื่อมต่อไปหา Host ทันที
         this.connectToHost(hostIdToConnect);
       }
     });
 
-    this.peer.on("error", (err) => {
-      console.error("PeerJS Error:", err.type, err);
-      alert("เกิดข้อผิดพลาด WebRTC: " + err.type);
-    });
-
+    // ฝั่ง PC (Host) รอรับการเชื่อมต่อจาก Smartphone/Client
     this.peer.on("connection", (conn) => {
-      this.setupConnectionEvents(conn);
+      this.connections.push(conn);
+      this.updateClientCounter();
+
+      conn.on("open", () => {
+        console.log("Client connected:", conn.peer);
+      });
+
+      conn.on("data", async (data) => {
+        await this.handleIncomingData(conn, data);
+      });
+
+      conn.on("close", () => {
+        this.connections = this.connections.filter((c) => c !== conn);
+        this.updateClientCounter();
+      });
     });
   }
 
   connectToHost(hostId) {
     console.log("Connecting to Host:", hostId);
-    const conn = this.peer.connect(hostId, { reliable: true });
-    this.setupConnectionEvents(conn);
-  }
+    const conn = this.peer.connect(hostId);
 
-  setupConnectionEvents(conn) {
     conn.on("open", () => {
-      console.log("Data channel opened with:", conn.peer);
-      
-      // เช็กป้องกันการเพิ่ม Connection ซ้ำ
-      if (!this.connections.some(c => c.peer === conn.peer)) {
-        this.connections.push(conn);
-      }
-      this.updateClientCounter();
-
-      // หากเป็น Client ให้ขอข้อมูลก้อนใหญ่ทันทีที่ต่อติด
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("syncId")) {
-        conn.send({ type: "REQUEST_FULL_SYNC" });
-      }
+      this.connections.push(conn);
+      console.log("Connected to Host successfully!");
+      // เมื่อเชื่อมต่อติด ให้ร้องขอคัดลอกฐานข้อมูลทั้งหมดทันที
+      conn.send({ type: "REQUEST_FULL_SYNC" });
     });
 
     conn.on("data", async (data) => {
@@ -66,13 +55,8 @@ class SyncEngine {
     });
 
     conn.on("close", () => {
-      console.log("Connection closed with:", conn.peer);
       this.connections = this.connections.filter((c) => c !== conn);
       this.updateClientCounter();
-    });
-
-    conn.on("error", (err) => {
-      console.error("Connection Error:", err);
     });
   }
 
@@ -84,14 +68,11 @@ class SyncEngine {
   }
 
   broadcastData(data) {
-    this.connections.forEach((conn) => {
-      if (conn.open) {
-        conn.send(data);
-      }
-    });
+    this.connections.forEach((conn) => conn.send(data));
   }
 
   async handleIncomingData(conn, data) {
+    // กรณี PC ถูกร้องขอให้คัดลอกข้อมูลส่งไปให้ Smartphone
     if (data.type === "REQUEST_FULL_SYNC") {
       console.log("Sending full database copy to client...");
       const meds = await dbEngine.getAll("medicine");
@@ -104,10 +85,12 @@ class SyncEngine {
       });
     }
 
+    // กรณี Smartphone ได้รับชุดข้อมูลจาก PC
     if (data.type === "RESPONSE_FULL_SYNC") {
       console.log("Received full database payload:", data.payload);
       const { meds, patients, bills } = data.payload;
 
+      // บันทึกลง IndexedDB เครื่อง Smartphone
       for (let m of meds) await dbEngine.update("medicine", m);
       for (let p of patients) await dbEngine.update("patient", p);
       for (let b of bills) await dbEngine.update("bill", b);
@@ -116,12 +99,15 @@ class SyncEngine {
       alert("คัดลอกฐานข้อมูลมายังเครื่องนี้สำเร็จเรียบร้อยแล้ว!");
     }
 
+    // กรณีอัปเดตข้อมูล Realtime ทั่วไป (ยา / คนไข้ / บิล ที่เพิ่มใหม่)
     if (data.type === "SYNC_DB") {
-      console.log(`Received realtime update for store [${data.store}]:`, data.payload);
+      // จุดที่บั๊ก: เดิมไม่มีการบันทึกข้อมูลที่ส่งมาลง IndexedDB เลย
+      // มีแค่ refreshData() ซึ่งอ่านฐานข้อมูล "ในเครื่องตัวเอง" เท่านั้น
+      // จึงทำให้ข้อมูลที่โอนมาไม่ถูกบันทึก และดูเหมือนโอนไม่สำเร็จ
       if (data.store && data.payload) {
         await dbEngine.update(data.store, data.payload);
-        if (typeof refreshData === "function") await refreshData();
       }
+      if (typeof refreshData === "function") await refreshData();
     }
   }
 
