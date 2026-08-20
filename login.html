@@ -36,7 +36,10 @@
       const valid = users.find(user => user.username === u && user.password === p);
       if (valid) {
         sessionStorage.setItem("loggedInUser", u);
-        window.location.href = "index.html";
+        // พา syncId (ถ้ามี จากการสแกน QR) กลับไปที่ index.html ด้วย
+        const urlParams = new URLSearchParams(window.location.search);
+        const syncId = urlParams.get("syncId");
+        window.location.href = syncId ? `index.html?syncId=${syncId}` : "index.html";
       } else {
         alert("Username หรือ Password ไม่ถูกต้อง!");
       }
