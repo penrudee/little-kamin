@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LittleKaminPOS - Local-First Pharmacy POS</title>
+  <title>ระบบบริหารจัดการร้านยา Local-First POS</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -12,7 +12,7 @@
   <!-- Nav Menu -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand" href="#">LittleKaminPOS v.0.0.1a</a>
+      <a class="navbar-brand" href="#">LittleKaminPOS V0.0.1c</a>
       <div class="navbar-nav me-auto">
         <button class="nav-link btn btn-link" onclick="switchTab('posTab')">1. ขายยา & คำนวณขนาดยาเด็ก</button>
         <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า</button>
@@ -34,6 +34,7 @@
           <div class="card mb-3">
             <div class="card-header bg-info text-white">ข้อมูลคนไข้</div>
             <div class="card-body">
+              <!-- เพิ่ม Event oninput เพื่อให้คำนวณทันทีเมื่อพิมพ์ -->
               <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ชื่อ-นามสกุล (Auto-complete)">
               <datalist id="patientList"></datalist>
               
@@ -62,12 +63,14 @@
           <div class="card">
             <div class="card-header bg-primary text-white">รายการขายยา</div>
             <div class="card-body">
+              <!-- กล่องแจ้งเตือนการคำนวณขนาดยา ย้ายมาไว้ด้านบนให้เห็นชัดเจน -->
               <div id="doseCalcAlert" class="alert alert-warning d-none fw-bold">
                 <strong>แนะนำขนาดยาเด็ก:</strong> <span id="doseCalcResult"></span>
               </div>
 
               <div class="row g-2 mb-3">
                 <div class="col-md-5">
+                  <!-- แก้ไข: ใส่ list="medList" และ Event oninput -->
                   <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อยา..." oninput="calculateDose()" onkeypress="handleMedEnter(event)">
                   <datalist id="medList"></datalist>
                 </div>
@@ -149,23 +152,27 @@
     let currentMeds = [];
 
     window.onload = async () => {
-      if (!sessionStorage.getItem("loggedInUser")) {
-        window.location.href = "login.html";
-        return;
-      }
-      await dbEngine.init();
+  // ตรวจสอบว่าใน URL มี syncId ติดมาจากการสแกน QR หรือไม่ (ต้องเช็คก่อน redirect ไป login)
+  const urlParams = new URLSearchParams(window.location.search);
+  const syncId = urlParams.get("syncId");
 
-      const urlParams = new URLSearchParams(window.location.search);
-      const syncId = urlParams.get("syncId");
+  if (!sessionStorage.getItem("loggedInUser")) {
+    // ยังไม่ login: ต้องพา syncId ไปด้วย ไม่งั้นสแกน QR แล้วจะกลายเป็น Host ใหม่แทนที่จะเป็น Client
+    window.location.href = syncId ? `login.html?syncId=${syncId}` : "login.html";
+    return;
+  }
+  await dbEngine.init();
 
-      if (syncId) {
-        syncEngine.initPeer(false, syncId);
-      } else {
-        syncEngine.initPeer(true);
-      }
+  if (syncId) {
+    // หากสแกนมาจาก QR Code ให้ทำหน้าที่เป็น Client
+    syncEngine.initPeer(false, syncId);
+  } else {
+    // หากเปิดปกติบน PC ให้ทำหน้าที่เป็น Host
+    syncEngine.initPeer(true);
+  }
 
-      await refreshData();
-    };
+  await refreshData();
+};
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('d-none'));
@@ -176,6 +183,7 @@
       currentMeds = await dbEngine.getAll("medicine");
       const patients = await dbEngine.getAll("patient");
 
+      // Render Med Datalist & Stock Table
       const medList = document.getElementById("medList");
       const stockTable = document.getElementById("stockTableBody");
       medList.innerHTML = "";
@@ -185,6 +193,7 @@
         stockTable.innerHTML += `<tr><td>${m.id}</td><td>${m.trade_name}</td><td>${m.generic_name}</td><td>${m.strength || '-'}</td><td>${m.dose || '-'} mg/kg/day</td><td>${m.price}</td></tr>`;
       });
 
+      // Render Patient Datalist & Patient Table
       const patList = document.getElementById("patientList");
       const patTable = document.getElementById("patientTableBody");
       patList.innerHTML = "";
@@ -195,6 +204,7 @@
       });
     }
 
+    // ฟังก์ชันคำนวณขนาดยาเด็ก (ยืดหยุ่น ยึดตามชื่อยาในช่องกรอก หรือตัวสุดท้ายที่เลือก)
     function calculateDose() {
       const age = parseFloat(document.getElementById("posAge").value) || 0;
       const weight = parseFloat(document.getElementById("posWeight").value) || 0;
@@ -204,7 +214,7 @@
       if (age < 12 && weight > 0 && medName) {
         const med = currentMeds.find(m => m.trade_name.toLowerCase().trim() === medName.toLowerCase().trim());
         if (med) {
-          const baseDose = parseFloat(med.dose) || 10;
+          const baseDose = parseFloat(med.dose) || 10; // ค่ามาตรฐาน 10mg/kg/day หากไม่ได้ตั้งค่าไว้
           const calculatedDose = (weight * baseDose).toFixed(1);
           
           document.getElementById("doseCalcResult").innerText = `${med.trade_name} (${med.strength || 'ไม่ระบุความเข้มข้น'}): ขนาดยาแนะนำสำหรับเด็กหนัก ${weight} kg คือ ${calculatedDose} mg/วัน`;
@@ -215,7 +225,7 @@
       alertBox.classList.add("d-none");
     }
 
-    // เพิ่มคนไข้ใหม่ + Broadcast ไปยังเครื่องอื่น
+    // ฟังก์ชันเพิ่มประวัติคนไข้ใหม่ (แก้ปัญหา Error: addNewPatientModal is not defined)
     async function addNewPatientModal() {
       const name = document.getElementById("posPatientName").value;
       const age = document.getElementById("posAge").value;
@@ -236,18 +246,17 @@
         timestamp: new Date().toISOString()
       };
 
-      const id = await dbEngine.add("patient", patientData);
-      patientData.id = id;
-
-      // Broadcast Generic Event
+      const newPatientId = await dbEngine.add("patient", patientData);
+      patientData.id = newPatientId;
       syncEngine.broadcastData({ type: "SYNC_DB", store: "patient", payload: patientData });
-
       await refreshData();
       alert(`บันทึกประวัติคนไข้ "${name}" เรียบร้อยแล้ว`);
     }
 
     function handleMedEnter(e) {
-      if (e.key === "Enter") addMedToCart();
+      if (e.key === "Enter") {
+        addMedToCart();
+      }
     }
 
     function addMedToCart() {
@@ -272,7 +281,7 @@
 
       renderCart();
       document.getElementById("posMedName").value = "";
-      document.getElementById("doseCalcAlert").classList.add("d-none");
+      document.getElementById("doseCalcAlert").classList.add("d-none"); // ซ่อนการคำนวณเมื่อเพิ่มยาลงตารางแล้ว
     }
 
     function renderCart() {
@@ -306,7 +315,7 @@
       renderCart();
     }
 
-    // เพิ่มยาเข้าคลัง + Broadcast ไปยังเครื่องอื่น
+    // เพิ่มยาเข้าคลัง
     document.getElementById("addMedForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const medData = {
@@ -316,19 +325,14 @@
         dose: document.getElementById("mDose").value,
         price: document.getElementById("mPrice").value
       };
-
-      const id = await dbEngine.add("medicine", medData);
-      medData.id = id;
-
-      // Broadcast Generic Event
+      const newMedId = await dbEngine.add("medicine", medData);
+      medData.id = newMedId;
       syncEngine.broadcastData({ type: "SYNC_DB", store: "medicine", payload: medData });
-
       e.target.reset();
       await refreshData();
       alert("เพิ่มยาเข้าคลังสำเร็จ!");
     });
 
-    // Checkout บิล + Broadcast ไปยังเครื่องอื่น
     async function checkout() {
       if (cart.length === 0) return alert("ยังไม่มีสินค้าในตะกร้า");
       
@@ -339,10 +343,8 @@
         items: cart
       };
 
-      const id = await dbEngine.add("bill", billData);
-      billData.id = id;
-
-      // Broadcast Generic Event
+      const newBillId = await dbEngine.add("bill", billData);
+      billData.id = newBillId;
       syncEngine.broadcastData({ type: "SYNC_DB", store: "bill", payload: billData });
       
       alert("บันทึกการขายสำเร็จ!");
