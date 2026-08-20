@@ -3,107 +3,172 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ประวัติการรับยาของคุณ - LittleKaminPOS</title>
+  <title>ประวัติการรับบริการและประวัติยา - LittleKaminPOS</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
-<body class="bg-light p-3">
-  <div class="container" style="max-width: 600px;">
+<body class="bg-light">
+  <div class="container my-4" style="max-width: 600px;">
+    <!-- Status Card -->
     <div class="card shadow-sm mb-3">
-      <div class="card-header bg-primary text-white text-center">
-        <h5 class="mb-0">ประวัติการรับยา / ประวัติคนไข้</h5>
+      <div class="card-header bg-primary text-white text-center fw-bold fs-5">
+        🏥 ประวัติการรับยา / Patient History
       </div>
       <div class="card-body">
-        <div id="patientProfile" class="mb-3">
-          <p class="text-center text-muted">กำลังดึงข้อมูลประวัติคนไข้...</p>
+        <div id="connectionStatus" class="alert alert-warning text-center py-2 mb-3">
+          ⏳ กำลังเชื่อมต่อไปยังระบบคลังยาของร้าน...
         </div>
-        <hr>
-        <h6>รายการประวัติการซื้อยา</h6>
-        <div id="historyList">
-          <div class="alert alert-info">กำลังเชื่อมต่อกับฐานข้อมูลร้านยาผ่าน WebRTC...</div>
+
+        <!-- Patient Info -->
+        <div id="patientProfile" class="d-none">
+          <div class="border-bottom pb-2 mb-3">
+            <h5 class="fw-bold text-success" id="pName">-</h5>
+            <div class="row text-muted small">
+              <div class="col-6">อายุ: <span id="pAge" class="fw-bold text-dark">-</span> ปี</div>
+              <div class="col-6">น้ำหนัก: <span id="pWeight" class="fw-bold text-dark">-</span> kg</div>
+              <div class="col-12 mt-1">รหัสคนไข้: <span id="pCode" class="fw-bold text-dark">-</span></div>
+            </div>
+          </div>
+
+          <h6 class="fw-bold mb-2">📜 ประวัติการซื้อยาล่าสุด</h6>
+          <div id="billHistoryList"></div>
         </div>
       </div>
     </div>
+    <div class="text-center text-muted small">
+      ระบบประวัติยาคนไข้แบบจัดเก็บในอุปกรณ์ (Local-First P2P)
+    </div>
   </div>
 
-  <script src="db.js"></script>
   <script>
     let peer = null;
-    const urlParams = new URLSearchParams(window.location.search);
-    const hostPeerId = urlParams.get("hostId");
-    const patientSpecialId = urlParams.get("patientId");
 
-    window.onload = async () => {
-      await dbEngine.init();
-      
-      // แสดงข้อมูลท้องถิ่นก่อน (ถ้ามี)
-      await renderLocalHistory();
+    window.onload = () => {
+      // ดึง Param จาก URL ที่สแกนได้จาก QR Code
+      const urlParams = new URLSearchParams(window.location.search);
+      const hostId = urlParams.get("hostId");
+      const patientId = urlParams.get("patientId");
 
-      // หากมี parameter ส่งมาให้เชื่อมต่อ WebRTC ไปขอข้อมูลอัปเดตจากร้านยา
-      if (hostPeerId && patientSpecialId) {
-        connectToPharmacyHost(hostPeerId, patientSpecialId);
+      if (!hostId || !patientId) {
+        document.getElementById("connectionStatus").className = "alert alert-danger text-center py-2";
+        document.getElementById("connectionStatus").innerText = "❌ QR Code ไม่ถูกต้อง หรือข้อมูลไม่ครบถ้วน";
+        return;
       }
+
+      // เริ่มต้นเชื่อมต่อ WebRTC ไปยังเครื่องร้านยา (Host) โดยไม่ต้องเข้าสู่ระบบ
+      connectToHostStore(hostId, patientId);
     };
 
-    async function renderLocalHistory() {
-      const patients = await dbEngine.getAll("patient");
-      const bills = await dbEngine.getAll("bill");
-
-      const patient = patients.find(p => p.patient_special_id === patientSpecialId);
-      if (patient) {
-        document.getElementById("patientProfile").innerHTML = `
-          <h5><strong>ชื่อ-สกุล:</strong> ${patient.full_name}</h5>
-          <div><strong>รหัสประจำตัว:</strong> ${patient.patient_special_id}</div>
-          <div><strong>อายุ:</strong> ${patient.age || '-'} ปี | <strong>น้ำหนัก:</strong> ${patient.weight || '-'} kg</div>
-        `;
-
-        const myBills = bills.filter(b => b.patientSpecialId === patientSpecialId || b.patientName === patient.full_name);
-        const historyContainer = document.getElementById("historyList");
-        
-        if (myBills.length === 0) {
-          historyContainer.innerHTML = `<div class="text-muted">ยังไม่มีประวัติการซื้อยา</div>`;
-          return;
-        }
-
-        historyContainer.innerHTML = myBills.map(b => `
-          <div class="card mb-2">
-            <div class="card-body p-2">
-              <div class="d-flex justify-content-between text-muted small">
-                <span>วันที่: ${new Date(b.timestamp).toLocaleString("th-TH")}</span>
-                <strong class="text-success">${b.total} บาท</strong>
-              </div>
-              <ul class="mb-0 mt-1 pl-3">
-                ${b.items ? b.items.map(i => `<li>${i.name} x ${i.qty}</li>`).join('') : '<li>ไม่ระบุรายการ</li>'}
-              </ul>
-            </div>
-          </div>
-        `).join('');
-      }
-    }
-
-    function connectToPharmacyHost(hostId, pId) {
+    function connectToHostStore(hostId, patientId) {
       peer = new Peer({
-        config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }
+        config: {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+            { urls: "stun:stun2.l.google.com:19302" }
+          ]
+        }
       });
 
       peer.on("open", () => {
-        const conn = peer.connect(hostId);
+        const conn = peer.connect(hostId, { reliable: true });
+
         conn.on("open", () => {
-          // ส่งคำขอข้อมูลเจาะจงเฉพาะรหัสคนไข้นี้
-          conn.send({ type: "REQUEST_PATIENT_HISTORY", patientSpecialId: pId });
+          document.getElementById("connectionStatus").className = "alert alert-info text-center py-2";
+          document.getElementById("connectionStatus").innerText = "🔄 เชื่อมต่อร้านยาสำเร็จ กำลังดึงประวัติยา...";
+          
+          // ส่งคำขอขอดึงข้อมูลประวัติเฉพาะคนไข้รายนี้
+          conn.send({
+            type: "REQUEST_PATIENT_HISTORY",
+            patientSpecialId: patientId
+          });
         });
 
-        conn.on("data", async (data) => {
+        conn.on("data", (data) => {
           if (data.type === "RESPONSE_PATIENT_HISTORY") {
-            const { patient, bills } = data.payload;
-            if (patient) await dbEngine.update("patient", patient);
-            if (bills) {
-              for (let b of bills) await dbEngine.update("bill", b);
-            }
-            await renderLocalHistory();
+            renderPatientData(data.payload);
           }
         });
+
+        conn.on("close", () => {
+          console.log("Connection closed");
+        });
+
+        conn.on("error", (err) => {
+          showError("ไม่สามารถดึงข้อมูลได้ เครื่องร้านยาอาจปิดอยู่");
+        });
       });
+
+      peer.on("error", (err) => {
+        showError("การเชื่อมต่อ P2P ขัดข้อง กรุณาลองสแกนใหม่อีกครั้ง");
+      });
+    }
+
+    function renderPatientData(payload) {
+      const { patient, bills } = payload;
+      const statusEl = document.getElementById("connectionStatus");
+
+      if (!patient && (!bills || bills.length === 0)) {
+        statusEl.className = "alert alert-warning text-center py-2";
+        statusEl.innerText = "⚠️ ไม่พบประวัติการรับยาของรหัสคนไข้นี้";
+        return;
+      }
+
+      statusEl.className = "alert alert-success text-center py-2";
+      statusEl.innerText = "✅ ดึงข้อมูลประวัติยาเรียบร้อยแล้ว";
+
+      // แสดงข้อมูลส่วนตัวคนไข้
+      document.getElementById("patientProfile").classList.remove("d-none");
+      document.getElementById("pName").innerText = patient ? patient.full_name : "คนไข้ทั่วไป";
+      document.getElementById("pAge").innerText = patient ? (patient.age || "-") : "-";
+      document.getElementById("pWeight").innerText = patient ? (patient.weight || "-") : "-";
+      document.getElementById("pCode").innerText = patient ? patient.patient_special_id : "-";
+
+      // แสดงรายการบิล/ยาที่เคยได้รับ
+      const listEl = document.getElementById("billHistoryList");
+      listEl.innerHTML = "";
+
+      if (!bills || bills.length === 0) {
+        listEl.innerHTML = `<div class="text-center text-muted py-3">ยังไม่มีประวัติการซื้อยา</div>`;
+        return;
+      }
+
+      // เรียงจากบิลล่าสุดขึ้นก่อน
+      bills.reverse().forEach((bill) => {
+        const dateStr = bill.timestamp ? new Date(bill.timestamp).toLocaleString("th-TH") : "ไม่ระบุวันที่";
+        
+        let itemsHtml = "";
+        if (bill.items && bill.items.length > 0) {
+          bill.items.forEach((item) => {
+            itemsHtml += `
+              <li class="list-group-item d-flex justify-content-between align-items-center py-1 fs-6">
+                <div>
+                  <strong>${item.name}</strong> 
+                  <small class="text-muted">x${item.qty}</small>
+                </div>
+                <span class="badge bg-secondary">${(item.price * item.qty).toFixed(2)} บาท</span>
+              </li>`;
+          });
+        }
+
+        listEl.innerHTML += `
+          <div class="card mb-2 border">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+              <small class="fw-bold text-primary">🗓️ ${dateStr}</small>
+              <span class="badge bg-success">รวม ${bill.total} บาท</span>
+            </div>
+            <ul class="list-group list-group-flush">
+              ${itemsHtml}
+            </ul>
+          </div>
+        `;
+      });
+    }
+
+    function showError(msg) {
+      const statusEl = document.getElementById("connectionStatus");
+      statusEl.className = "alert alert-danger text-center py-2";
+      statusEl.innerText = "❌ " + msg;
     }
   </script>
 </body>
