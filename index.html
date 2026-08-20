@@ -152,14 +152,26 @@
     let currentMeds = [];
 
     window.onload = async () => {
-      if (!sessionStorage.getItem("loggedInUser")) {
-        window.location.href = "login.html";
-        return;
-      }
-      await dbEngine.init();
-      syncEngine.initPeer(true);
-      await refreshData();
-    };
+  if (!sessionStorage.getItem("loggedInUser")) {
+    window.location.href = "login.html";
+    return;
+  }
+  await dbEngine.init();
+
+  // ตรวจสอบว่าใน URL มี syncId ติดมาจากการสแกน QR หรือไม่
+  const urlParams = new URLSearchParams(window.location.search);
+  const syncId = urlParams.get("syncId");
+
+  if (syncId) {
+    // หากสแกนมาจาก QR Code ให้ทำหน้าที่เป็น Client
+    syncEngine.initPeer(false, syncId);
+  } else {
+    // หากเปิดปกติบน PC ให้ทำหน้าที่เป็น Host
+    syncEngine.initPeer(true);
+  }
+
+  await refreshData();
+};
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('d-none'));
