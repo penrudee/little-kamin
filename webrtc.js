@@ -92,7 +92,6 @@ class SyncEngine {
       if (typeof refreshData === "function") await refreshData();
     }
 
-    // รองรับการเพิ่ม/แก้ไขข้อมูลลง DB
     if (data.type === "SYNC_DB") {
       if (data.store && data.payload) {
         await dbEngine.update(data.store, data.payload);
@@ -100,7 +99,6 @@ class SyncEngine {
       }
     }
 
-    // รองรับการลบข้อมูลจาก DB
     if (data.type === "DELETE_DB") {
       if (data.store && data.id) {
         await dbEngine.delete(data.store, data.id);
