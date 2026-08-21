@@ -223,6 +223,7 @@
               <option value="3 ครั้งต่อวัน">3 ครั้งต่อวัน (ทุก 8 ชม.)</option>
               <option value="4 ครั้งต่อวัน">4 ครั้งต่อวัน (ทุก 6 ชม.)</option>
               <option value="2 ครั้งต่อวัน">2 ครั้งต่อวัน (ทุก 12 ชม.)</option>
+              <option value="1 ครั้งต่อวัน">1 ครั้งต่อวัน (ทุก 24 ชม.)</option>
               <option value="ทุก 4 ชั่วโมง">ทุก 4 ชั่วโมง (6 ครั้งต่อวัน)</option>
             </select>
           </div>
@@ -455,7 +456,7 @@
                 if (med.frequency.includes("4 ครั้ง") || med.frequency.includes("ทุก 6")) timesPerDay = 4;
                 else if (med.frequency.includes("3 ครั้ง") || med.frequency.includes("ทุก 8")) timesPerDay = 3;
                 else if (med.frequency.includes("2 ครั้ง") || med.frequency.includes("ทุก 12")) timesPerDay = 2;
-                else if (med.frequency.includes("1 ครั้ง") || med.frequency.includes("วันละ 1 ครั้ง")) timesPerDay = 1;
+                else if (med.frequency.includes("1 ครั้ง") || med.frequency.includes("ทุก 24")) timesPerDay = 1;
                 else if (med.frequency.includes("ทุก 4 ชั่วโมง")) timesPerDay = 6;
               }
 
