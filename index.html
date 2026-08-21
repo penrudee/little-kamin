@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LittleKaminPOS - Local-First Pharmacy POS</title>
-   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -34,7 +33,7 @@
   <!-- Nav Menu -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand" href="#">LittleKaminPOS V. 0.0.1F</a>
+      <a class="navbar-brand" href="#">LittleKaminPOS</a>
       <div class="navbar-nav me-auto">
         <button class="nav-link btn btn-link" onclick="switchTab('posTab')">1. ขายยา & คำนวณขนาดยาเด็ก</button>
         <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า</button>
@@ -42,7 +41,7 @@
         <a class="nav-link" href="settings.html">4. ตั้งค่า</a>
       </div>
       <span class="navbar-text text-warning" id="clientCountDisplay">
-        การเชื่อมต่อ Active: 0 จุด
+        การเชื่อมต่อ WebRTC Active: 0 จุด
       </span>
     </div>
   </nav>
@@ -56,12 +55,12 @@
           <div class="card mb-3">
             <div class="card-header bg-info text-white">ข้อมูลคนไข้</div>
             <div class="card-body">
-              <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ชื่อ-นามสกุล (Auto-complete)" oninput="checkExistingPatient()">
+              <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ค้นหาชื่อ หรือ เบอร์โทรคนไข้..." oninput="checkExistingPatient()">
               <datalist id="patientList"></datalist>
               
               <div class="row g-2 mb-2">
-                <div class="col-6"><input type="number" id="posAge" class="form-control" placeholder="อายุ (ปี)" oninput="calculateDose()"></div>
-                <div class="col-6"><input type="number" id="posWeight" class="form-control" placeholder="น้ำหนัก (kg)" oninput="calculateDose()"></div>
+                <div class="col-6"><input type="number" step="0.1" id="posAge" class="form-control" placeholder="อายุ (ปี)" oninput="calculateDose()"></div>
+                <div class="col-6"><input type="number" step="0.1" id="posWeight" class="form-control" placeholder="น้ำหนัก (kg)" oninput="calculateDose()"></div>
               </div>
               <input type="text" id="posPhone" class="form-control mb-2" placeholder="เบอร์โทรศัพท์" oninput="checkExistingPatient()">
               
@@ -97,11 +96,11 @@
               </div>
 
               <div class="row g-2 mb-3">
-                <div class="col-md-5">
-                  <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อยา..." oninput="calculateDose()" onkeypress="handleMedEnter(event)">
+                <div class="col-md-6">
+                  <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อการค้า หรือ ชื่อสามัญทางยา..." oninput="calculateDose()" onkeypress="handleMedEnter(event)">
                   <datalist id="medList"></datalist>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                   <input type="number" id="posQty" class="form-control" value="1" placeholder="จำนวน" oninput="calculateDose()">
                 </div>
                 <div class="col-md-4">
@@ -138,23 +137,43 @@
       <div class="card">
         <div class="card-header bg-dark text-white">จัดการคลังสินค้า (Medicine Table)</div>
         <div class="card-body">
-          <form id="addMedForm" class="row g-2 mb-3">
-            <div class="col-md-2"><input type="text" id="mTrade" class="form-control" placeholder="Trade Name" required></div>
-            <div class="col-md-2"><input type="text" id="mGeneric" class="form-control" placeholder="Generic Name" required></div>
-            <div class="col-md-2"><input type="text" id="mStrength" class="form-control" placeholder="Strength (เช่น 125mg/5ml)" required></div>
-            <div class="col-md-2"><input type="number" step="0.1" id="mDose" class="form-control" placeholder="Dose (mg/kg/day)" required></div>
-            <div class="col-md-2">
-              <select id="mFreq" class="form-select" required>
-                <option value="">--เลือกความถี่--</option>
-                <option value="3 ครั้งต่อวัน">3 ครั้งต่อวัน (ทุก 8 ชม.)</option>
-                <option value="4 ครั้งต่อวัน">4 ครั้งต่อวัน (ทุก 6 ชม.)</option>
-                <option value="2 ครั้งต่อวัน">2 ครั้งต่อวัน (ทุก 12 ชม.)</option>
-                <option value="1 ครั้งต่อวัน">1 ครั้งต่อวัน (ทุก 24 ชม.)</option>
-                <option value="ทุก 4 ชั่วโมง">ทุก 4 ชั่วโมง (6 ครั้งต่อวัน)</option>
-              </select>
+          <form id="addMedForm" class="mb-4">
+            <div class="row g-2 mb-2">
+              <div class="col-md-3"><input type="text" id="mTrade" class="form-control" placeholder="Trade Name (ชื่อการค้า)" required></div>
+              <div class="col-md-3"><input type="text" id="mGeneric" class="form-control" placeholder="Generic Name (ชื่อสามัญ)" required></div>
+              <div class="col-md-2"><input type="text" id="mStrength" class="form-control" placeholder="Strength (เช่น 67mg/1ml)" required></div>
+              <div class="col-md-2">
+                <select id="mDosingType" class="form-select" onchange="toggleDosingInputUI('add')">
+                  <option value="weight_based">คิดตามน้ำหนัก (mg/kg/day)</option>
+                  <option value="age_based">คิดตามช่วงอายุ (Age-based)</option>
+                </select>
+              </div>
+              <div class="col-md-2"><input type="number" id="mPrice" class="form-control" placeholder="ราคา (บาท)" required></div>
             </div>
-            <div class="col-md-1"><input type="number" id="mPrice" class="form-control" placeholder="ราคา" required></div>
-            <div class="col-md-1"><button type="submit" class="btn btn-primary w-100">+ เพิ่ม</button></div>
+
+            <!-- โหมดตามน้ำหนัก -->
+            <div id="addWeightGroup" class="row g-2 mb-2">
+              <div class="col-md-6"><input type="number" step="0.1" id="mDose" class="form-control" placeholder="Dose (mg/kg/day)"></div>
+              <div class="col-md-6">
+                <select id="mFreq" class="form-select">
+                  <option value="3 ครั้งต่อวัน">3 ครั้งต่อวัน (ทุก 8 ชม.)</option>
+                  <option value="4 ครั้งต่อวัน">4 ครั้งต่อวัน (ทุก 6 ชม.)</option>
+                  <option value="2 ครั้งต่อวัน">2 ครั้งต่อวัน (ทุก 12 ชม.)</option>
+                  <option value="ทุก 4 ชั่วโมง">ทุก 4 ชั่วโมง (6 ครั้งต่อวัน)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- โหมดตามช่วงอายุ (เช่น Simethicone) -->
+            <div id="addAgeGroup" class="card card-body bg-light mb-2 d-none">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="fw-bold">กําหนดช่วงอายุ (Age Brackets):</span>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addAgeBracketRow('add')">+ เพิ่มช่วงอายุ</button>
+              </div>
+              <div id="addAgeBracketContainer"></div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">+ เพิ่มรายการยาเข้าคลัง</button>
           </form>
 
           <table class="table table-striped align-middle">
@@ -164,8 +183,7 @@
                 <th>Trade Name</th>
                 <th>Generic Name</th>
                 <th>Strength</th>
-                <th>Dose (mg/kg/day)</th>
-                <th>ความถี่ในการทาน</th>
+                <th>เกณฑ์ขนาดยา</th>
                 <th>ราคา</th>
                 <th class="text-center">จัดการ</th>
               </tr>
@@ -194,7 +212,7 @@
 
   <!-- Modal สำหรับแก้ไขข้อมูละยา -->
   <div class="modal fade" id="editMedModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header bg-warning">
           <h5 class="modal-title">แก้ไขข้อมูละยา</h5>
@@ -202,35 +220,56 @@
         </div>
         <div class="modal-body">
           <input type="hidden" id="editMedId">
-          <div class="mb-2">
-            <label class="form-label">Trade Name</label>
-            <input type="text" id="editMTrade" class="form-control" required>
+          <div class="row g-2 mb-2">
+            <div class="col-md-6">
+              <label class="form-label">Trade Name</label>
+              <input type="text" id="editMTrade" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Generic Name</label>
+              <input type="text" id="editMGeneric" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Strength</label>
+              <input type="text" id="editMStrength" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">ประเภทการคิดโดส</label>
+              <select id="editMDosingType" class="form-select" onchange="toggleDosingInputUI('edit')">
+                <option value="weight_based">คิดตามน้ำหนัก (mg/kg/day)</option>
+                <option value="age_based">คิดตามช่วงอายุ (Age-based)</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">ราคา (บาท)</label>
+              <input type="number" id="editMPrice" class="form-control" required>
+            </div>
           </div>
-          <div class="mb-2">
-            <label class="form-label">Generic Name</label>
-            <input type="text" id="editMGeneric" class="form-control" required>
+
+          <!-- โหมดตามน้ำหนัก (Edit) -->
+          <div id="editWeightGroup" class="row g-2 mb-2">
+            <div class="col-md-6">
+              <label class="form-label">Dose (mg/kg/day)</label>
+              <input type="number" step="0.1" id="editMDose" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">ความถี่ในการทาน</label>
+              <select id="editMFreq" class="form-select">
+                <option value="3 ครั้งต่อวัน">3 ครั้งต่อวัน (ทุก 8 ชม.)</option>
+                <option value="4 ครั้งต่อวัน">4 ครั้งต่อวัน (ทุก 6 ชม.)</option>
+                <option value="2 ครั้งต่อวัน">2 ครั้งต่อวัน (ทุก 12 ชม.)</option>
+                <option value="ทุก 4 ชั่วโมง">ทุก 4 ชั่วโมง (6 ครั้งต่อวัน)</option>
+              </select>
+            </div>
           </div>
-          <div class="mb-2">
-            <label class="form-label">Strength</label>
-            <input type="text" id="editMStrength" class="form-control" required>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">Dose (mg/kg/day)</label>
-            <input type="number" step="0.1" id="editMDose" class="form-control" required>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">ความถี่ในการทาน</label>
-            <select id="editMFreq" class="form-select" required>
-              <option value="3 ครั้งต่อวัน">3 ครั้งต่อวัน (ทุก 8 ชม.)</option>
-              <option value="4 ครั้งต่อวัน">4 ครั้งต่อวัน (ทุก 6 ชม.)</option>
-              <option value="2 ครั้งต่อวัน">2 ครั้งต่อวัน (ทุก 12 ชม.)</option>
-              <option value="1 ครั้งต่อวัน">1 ครั้งต่อวัน (ทุก 24 ชม.)</option>
-              <option value="ทุก 4 ชั่วโมง">ทุก 4 ชั่วโมง (6 ครั้งต่อวัน)</option>
-            </select>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">ราคา (บาท)</label>
-            <input type="number" id="editMPrice" class="form-control" required>
+
+          <!-- โหมดตามช่วงอายุ (Edit) -->
+          <div id="editAgeGroup" class="card card-body bg-light mb-2 d-none">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold">กําหนดช่วงอายุ (Age Brackets):</span>
+              <button type="button" class="btn btn-sm btn-outline-primary" onclick="addAgeBracketRow('edit')">+ เพิ่มช่วงอายุ</button>
+            </div>
+            <div id="editAgeBracketContainer"></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -241,7 +280,7 @@
     </div>
   </div>
 
-  <!-- โครงสร้างบัตรสำหรับสั่งพิมพ์ -->
+  <!-- บัตรสั่งพิมพ์ -->
   <div id="printablePatientCard">
     <div style="font-size: 12px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 5px;">
       บัตรประจำตัวคนไข้ - ร้านยา LittleKaminPOS
@@ -271,7 +310,6 @@
         return;
       }
       await dbEngine.init();
-
       editModalObj = new bootstrap.Modal(document.getElementById('editMedModal'));
 
       const urlParams = new URLSearchParams(window.location.search);
@@ -283,12 +321,61 @@
         syncEngine.initPeer(true);
       }
 
+      // ตั้งค่าเริ่มต้นของแถบช่วงอายุสำหรับฟอร์มเพิ่มยา
+      addAgeBracketRow('add', 0, 24, 20); // ต่ำกว่า 2 ปี -> 20 mg/dose
+      addAgeBracketRow('add', 24, 144, 40); // 2 - 12 ปี -> 40 mg/dose
+
       await refreshData();
     };
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('d-none'));
       document.getElementById(tabId).classList.remove('d-none');
+    }
+
+    function toggleDosingInputUI(prefix) {
+      const type = document.getElementById(prefix === 'add' ? 'mDosingType' : 'editMDosingType').value;
+      const weightGroup = document.getElementById(prefix === 'add' ? 'addWeightGroup' : 'editWeightGroup');
+      const ageGroup = document.getElementById(prefix === 'add' ? 'addAgeGroup' : 'editAgeGroup');
+
+      if (type === 'age_based') {
+        weightGroup.classList.add('d-none');
+        ageGroup.classList.remove('d-none');
+      } else {
+        weightGroup.classList.remove('d-none');
+        ageGroup.classList.add('d-none');
+      }
+    }
+
+    function addAgeBracketRow(prefix, minM = 0, maxM = 24, dose = 20) {
+      const container = document.getElementById(prefix === 'add' ? 'addAgeBracketContainer' : 'editAgeBracketContainer');
+      const rowId = `bracket_${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+      const html = `
+        <div class="input-group input-group-sm mb-1 bracket-row" id="${rowId}">
+          <span class="input-group-text">อายุ</span>
+          <input type="number" class="form-control br-min" placeholder="เดือนเริ่ม" value="${minM}">
+          <span class="input-group-text">ถึง</span>
+          <input type="number" class="form-control br-max" placeholder="เดือนสิ้นสุด" value="${maxM}">
+          <span class="input-group-text">เดือน =</span>
+          <input type="number" class="form-control br-dose" placeholder="mg/dose" value="${dose}">
+          <span class="input-group-text">mg/dose</span>
+          <button class="btn btn-outline-danger" type="button" onclick="document.getElementById('${rowId}').remove()">✕</button>
+        </div>
+      `;
+      container.insertAdjacentHTML('beforeend', html);
+    }
+
+    function getAgeBracketsFromUI(prefix) {
+      const container = document.getElementById(prefix === 'add' ? 'addAgeBracketContainer' : 'editAgeBracketContainer');
+      const rows = container.querySelectorAll('.bracket-row');
+      const brackets = [];
+      rows.forEach(r => {
+        const minM = parseFloat(r.querySelector('.br-min').value) || 0;
+        const maxM = parseFloat(r.querySelector('.br-max').value) || 0;
+        const dose = parseFloat(r.querySelector('.br-dose').value) || 0;
+        brackets.push({ min_age_months: minM, max_age_months: maxM, dose_mg: dose });
+      });
+      return brackets;
     }
 
     async function refreshData() {
@@ -299,16 +386,28 @@
       const stockTable = document.getElementById("stockTableBody");
       medList.innerHTML = "";
       stockTable.innerHTML = "";
+      
       currentMeds.forEach(m => {
-        medList.innerHTML += `<option value="${m.trade_name}">`;
+        // Autocomplete ทั้ง Trade Name และ Generic Name
+        medList.innerHTML += `<option value="${m.trade_name}">${m.generic_name || ''} | ${m.strength || ''} (${m.price}฿)</option>`;
+        if (m.generic_name && m.generic_name.toLowerCase() !== m.trade_name.toLowerCase()) {
+          medList.innerHTML += `<option value="${m.generic_name}">${m.trade_name} | ${m.strength || ''} (${m.price}฿)</option>`;
+        }
+
+        let doseDisplay = "";
+        if (m.dosing_type === "age_based" && m.age_brackets) {
+          doseDisplay = m.age_brackets.map(b => `${(b.min_age_months/12).toFixed(0)}-${(b.max_age_months/12).toFixed(0)}ปี: ${b.dose_mg}mg`).join(", ");
+        } else {
+          doseDisplay = `${m.dose || '-'} mg/kg/day (${m.frequency || '-'})`;
+        }
+
         stockTable.innerHTML += `
           <tr>
             <td>${m.id}</td>
             <td><strong>${m.trade_name}</strong></td>
             <td>${m.generic_name}</td>
             <td><span class="badge bg-secondary">${m.strength || '-'}</span></td>
-            <td>${m.dose || '-'} mg/kg/day</td>
-            <td>${m.frequency || '-'}</td>
+            <td><small>${doseDisplay}</small></td>
             <td>${m.price} บาท</td>
             <td class="text-center">
               <button class="btn btn-sm btn-warning me-1" onclick="openEditMedModal(${m.id})">แก้ไข</button>
@@ -317,17 +416,20 @@
           </tr>`;
       });
 
+      // Autocomplete คนไข้ทั้ง ชื่อ และ เบอร์โทร
       const patList = document.getElementById("patientList");
       const patTable = document.getElementById("patientTableBody");
       patList.innerHTML = "";
       patTable.innerHTML = "";
       patients.forEach(p => {
-        patList.innerHTML += `<option value="${p.full_name}">`;
+        patList.innerHTML += `<option value="${p.full_name}">${p.phone ? 'โทร: ' + p.phone : ''} | รหัส: ${p.patient_special_id}</option>`;
+        if (p.phone) {
+          patList.innerHTML += `<option value="${p.phone}">${p.full_name} | รหัส: ${p.patient_special_id}</option>`;
+        }
         patTable.innerHTML += `<tr><td>${p.id}</td><td>${p.full_name}</td><td>${p.age || '-'}</td><td>${p.phone || '-'}</td><td>${p.weight || '-'} kg</td><td>${p.patient_special_id}</td></tr>`;
       });
     }
 
-    // เปิด Modal แก้ไขข้อมูลยา
     function openEditMedModal(id) {
       const med = currentMeds.find(m => m.id === id);
       if (!med) return;
@@ -336,24 +438,41 @@
       document.getElementById("editMTrade").value = med.trade_name;
       document.getElementById("editMGeneric").value = med.generic_name;
       document.getElementById("editMStrength").value = med.strength || "";
-      document.getElementById("editMDose").value = med.dose || "";
-      document.getElementById("editMFreq").value = med.frequency || "3 ครั้งต่อวัน";
+      document.getElementById("editMDosingType").value = med.dosing_type || "weight_based";
       document.getElementById("editMPrice").value = med.price;
 
+      document.getElementById("editMDose").value = med.dose || "";
+      document.getElementById("editMFreq").value = med.frequency || "3 ครั้งต่อวัน";
+
+      const editAgeContainer = document.getElementById("editAgeBracketContainer");
+      editAgeContainer.innerHTML = "";
+
+      if (med.age_brackets && med.age_brackets.length > 0) {
+        med.age_brackets.forEach(b => {
+          addAgeBracketRow('edit', b.min_age_months, b.max_age_months, b.dose_mg);
+        });
+      } else {
+        addAgeBracketRow('edit', 0, 24, 20);
+      }
+
+      toggleDosingInputUI('edit');
       editModalObj.show();
     }
 
-    // บันทึกการแก้ไขยา + Broadcast
     async function saveEditedMedicine() {
       const id = parseInt(document.getElementById("editMedId").value);
+      const dosingType = document.getElementById("editMDosingType").value;
+
       const medData = {
         id: id,
         trade_name: document.getElementById("editMTrade").value,
         generic_name: document.getElementById("editMGeneric").value,
         strength: document.getElementById("editMStrength").value,
-        dose: document.getElementById("editMDose").value,
-        frequency: document.getElementById("editMFreq").value,
-        price: document.getElementById("editMPrice").value
+        dosing_type: dosingType,
+        price: document.getElementById("editMPrice").value,
+        dose: dosingType === "weight_based" ? document.getElementById("editMDose").value : "",
+        frequency: dosingType === "weight_based" ? document.getElementById("editMFreq").value : "",
+        age_brackets: dosingType === "age_based" ? getAgeBracketsFromUI('edit') : []
       };
 
       await dbEngine.update("medicine", medData);
@@ -364,23 +483,21 @@
       alert("แก้ไขข้อมูลยาสำเร็จ!");
     }
 
-    // ลบรายการยาในคลัง + Broadcast
     async function deleteMedicine(id, tradeName) {
       if (confirm(`คุณต้องการลบรายการยา "${tradeName}" ออกจากคลังใช่หรือไม่?`)) {
         await dbEngine.delete("medicine", id);
         syncEngine.broadcastData({ type: "DELETE_DB", store: "medicine", id: id });
-
         await refreshData();
         alert("ลบรายการยาสำเร็จ!");
       }
     }
 
     async function checkExistingPatient() {
-      const name = document.getElementById("posPatientName").value.trim().toLowerCase();
-      const phone = document.getElementById("posPhone").value.trim();
+      const inputVal = document.getElementById("posPatientName").value.trim().toLowerCase();
+      const phoneVal = document.getElementById("posPhone").value.trim();
       const qrBox = document.getElementById("patientQrBox");
 
-      if (!name) {
+      if (!inputVal && !phoneVal) {
         qrBox.classList.add("d-none");
         currentFoundPatient = null;
         return;
@@ -388,11 +505,14 @@
 
       const patients = await dbEngine.getAll("patient");
       const found = patients.find(p => 
-        p.full_name.toLowerCase() === name && (!phone || p.phone === phone)
+        p.full_name.toLowerCase() === inputVal || 
+        (p.phone && p.phone === inputVal) ||
+        (p.phone && p.phone === phoneVal)
       );
 
       if (found) {
         currentFoundPatient = found;
+        document.getElementById("posPatientName").value = found.full_name;
         document.getElementById("posAge").value = found.age || "";
         document.getElementById("posWeight").value = found.weight || "";
         document.getElementById("posPhone").value = found.phone || "";
@@ -414,7 +534,6 @@
 
     function printPatientCard() {
       if (!currentFoundPatient) return;
-
       document.getElementById("printName").innerText = currentFoundPatient.full_name;
       document.getElementById("printAge").innerText = currentFoundPatient.age || "-";
       document.getElementById("printPhone").innerText = currentFoundPatient.phone || "-";
@@ -429,53 +548,89 @@
     }
 
     function calculateDose() {
-      const age = parseFloat(document.getElementById("posAge").value) || 0;
+      const ageYears = parseFloat(document.getElementById("posAge").value) || 0;
+      const ageMonths = ageYears * 12;
       const weight = parseFloat(document.getElementById("posWeight").value) || 0;
-      const medName = document.getElementById("posMedName").value;
+      const medName = document.getElementById("posMedName").value.trim().toLowerCase();
       const alertBox = document.getElementById("doseCalcAlert");
       const resultDiv = document.getElementById("doseCalcResult");
 
-      if (age < 12 && weight > 0 && medName) {
-        const med = currentMeds.find(m => m.trade_name.toLowerCase().trim() === medName.toLowerCase().trim());
-        if (med && med.dose) {
-          const dosePerKgDay = parseFloat(med.dose);
-          const totalMgPerDay = weight * dosePerKgDay;
+      if (!medName) {
+        alertBox.classList.add("d-none");
+        return;
+      }
 
-          let mlPerDayText = "";
-          let mlPerDoseText = "";
-          
-          if (med.strength) {
-            const match = med.strength.match(/(\d+)\s*mg\s*\/\s*(\d+)\s*ml/i);
-            if (match) {
-              const mgConcentration = parseFloat(match[1]);
-              const mlConcentration = parseFloat(match[2]);
-              const totalMlPerDay = (totalMgPerDay * mlConcentration) / mgConcentration;
-              mlPerDayText = `${totalMlPerDay.toFixed(2)} ml/วัน`;
+      const med = currentMeds.find(m => 
+        m.trade_name.toLowerCase() === medName || 
+        (m.generic_name && m.generic_name.toLowerCase() === medName)
+      );
 
-              let timesPerDay = 3;
-              if (med.frequency) {
-                if (med.frequency.includes("4 ครั้ง") || med.frequency.includes("ทุก 6")) timesPerDay = 4;
-                else if (med.frequency.includes("3 ครั้ง") || med.frequency.includes("ทุก 8")) timesPerDay = 3;
-                else if (med.frequency.includes("2 ครั้ง") || med.frequency.includes("ทุก 12")) timesPerDay = 2;
-                else if (med.frequency.includes("1 ครั้ง") || med.frequency.includes("ทุก 24")) timesPerDay = 1;
-                else if (med.frequency.includes("ทุก 4 ชั่วโมง")) timesPerDay = 6;
-              }
+      if (!med) {
+        alertBox.classList.add("d-none");
+        return;
+      }
 
-              const mlPerDose = totalMlPerDay / timesPerDay;
-              mlPerDoseText = `<br>👉 <strong>ขนาดยาต่อมื้อ:</strong> <span class="text-danger fs-5 fw-bold">${mlPerDose.toFixed(2)} ml</span> (${med.frequency || 'วันละ ' + timesPerDay + ' ครั้ง'})`;
-            }
+      let mgPerMl = 0;
+      if (med.strength) {
+        const match = med.strength.match(/(\d+)\s*mg\s*\/\s*(\d+)\s*ml/i);
+        if (match) mgPerMl = parseFloat(match[1]) / parseFloat(match[2]);
+      }
+
+      // CASE 1: คิดตามช่วงอายุ (เช่น Simethicone Drops)
+      if (med.dosing_type === "age_based" && med.age_brackets && ageMonths > 0) {
+        const bracket = med.age_brackets.find(b => ageMonths >= b.min_age_months && ageMonths < b.max_age_months);
+        if (bracket) {
+          const targetMg = bracket.dose_mg;
+          let mlText = "";
+          if (mgPerMl > 0) {
+            const mlPerDose = targetMg / mgPerMl;
+            const drops = (mlPerDose * 20).toFixed(0);
+            mlText = `<br>👉 <strong>ขนาดยาต่อมื้อ:</strong> <span class="text-danger fs-5 fw-bold">${mlPerDose.toFixed(2)} ml</span> (~${drops} หยด) [${targetMg} mg/dose]`;
           }
 
           resultDiv.innerHTML = `
-            <div>• ยา: <strong>${med.trade_name}</strong> (${med.strength})</div>
-            <div>• กำหนดโดส: <strong>${med.dose} mg/kg/day</strong> | น้ำหนักเด็ก: <strong>${weight} kg</strong></div>
-            <div>• ปริมาณยารวมที่ต้องได้รับ: <strong>${totalMgPerDay.toFixed(1)} mg/วัน</strong> ${mlPerDayText ? '(' + mlPerDayText + ')' : ''}</div>
-            ${mlPerDoseText}
+            <div>• ยา: <strong>${med.trade_name}</strong> (${med.strength || '-'})</div>
+            <div>• เกณฑ์คำนวณ: <strong>ตามช่วงอายุ (${(bracket.min_age_months/12).toFixed(0)} - ${(bracket.max_age_months/12).toFixed(0)} ปี)</strong></div>
+            ${mlText}
           `;
           alertBox.classList.remove("d-none");
           return;
         }
       }
+
+      // CASE 2: คิดตามน้ำหนัก (Weight-based Dosing)
+      if (weight > 0 && med.dose) {
+        const dosePerKgDay = parseFloat(med.dose);
+        const totalMgPerDay = weight * dosePerKgDay;
+        let mlPerDayText = "";
+        let mlPerDoseText = "";
+
+        if (mgPerMl > 0) {
+          const totalMlPerDay = totalMgPerDay / mgPerMl;
+          mlPerDayText = `${totalMlPerDay.toFixed(2)} ml/วัน`;
+
+          let timesPerDay = 3;
+          if (med.frequency) {
+            if (med.frequency.includes("4 ครั้ง") || med.frequency.includes("ทุก 6")) timesPerDay = 4;
+            else if (med.frequency.includes("3 ครั้ง") || med.frequency.includes("ทุก 8")) timesPerDay = 3;
+            else if (med.frequency.includes("2 ครั้ง") || med.frequency.includes("ทุก 12")) timesPerDay = 2;
+            else if (med.frequency.includes("ทุก 4 ชั่วโมง")) timesPerDay = 6;
+          }
+
+          const mlPerDose = totalMlPerDay / timesPerDay;
+          mlPerDoseText = `<br>👉 <strong>ขนาดยาต่อมื้อ:</strong> <span class="text-danger fs-5 fw-bold">${mlPerDose.toFixed(2)} ml</span> (${med.frequency || 'วันละ ' + timesPerDay + ' ครั้ง'})`;
+        }
+
+        resultDiv.innerHTML = `
+          <div>• ยา: <strong>${med.trade_name}</strong> (${med.strength || '-'})</div>
+          <div>• กำหนดโดส: <strong>${med.dose} mg/kg/day</strong> | น้ำหนักเด็ก: <strong>${weight} kg</strong></div>
+          <div>• ปริมาณยารวม: <strong>${totalMgPerDay.toFixed(1)} mg/วัน</strong> ${mlPerDayText ? '(' + mlPerDayText + ')' : ''}</div>
+          ${mlPerDoseText}
+        `;
+        alertBox.classList.remove("d-none");
+        return;
+      }
+
       alertBox.classList.add("d-none");
     }
 
@@ -485,10 +640,7 @@
       const weight = document.getElementById("posWeight").value;
       const phone = document.getElementById("posPhone").value;
 
-      if (!name) {
-        alert("กรุณากรอกชื่อ-นามสกุล คนไข้");
-        return;
-      }
+      if (!name) return alert("กรุณากรอกชื่อ-นามสกุล คนไข้");
 
       const patientData = {
         full_name: name,
@@ -503,7 +655,6 @@
       patientData.id = id;
 
       syncEngine.broadcastData({ type: "SYNC_DB", store: "patient", payload: patientData });
-
       await refreshData();
       await checkExistingPatient();
       alert(`บันทึกประวัติคนไข้ "${name}" เรียบร้อยแล้ว`);
@@ -514,14 +665,18 @@
     }
 
     function addMedToCart() {
-      const name = document.getElementById("posMedName").value;
+      const name = document.getElementById("posMedName").value.trim().toLowerCase();
       const qty = parseInt(document.getElementById("posQty").value) || 1;
-      const med = currentMeds.find(m => m.trade_name.toLowerCase().trim() === name.toLowerCase().trim());
+      
+      const med = currentMeds.find(m => 
+        m.trade_name.toLowerCase() === name || 
+        (m.generic_name && m.generic_name.toLowerCase() === name)
+      );
 
       if (!med) {
-        if (confirm(`ยังไม่มียา "${name}" ในคลัง ต้องการไปที่หน้าคลังเพื่อเพิ่มยาหรือไม่?`)) {
+        if (confirm(`ยังไม่มียา "${document.getElementById("posMedName").value}" ในคลัง ต้องการไปที่หน้าคลังเพื่อเพิ่มยาหรือไม่?`)) {
           switchTab('stockTab');
-          document.getElementById('mTrade').value = name;
+          document.getElementById('mTrade').value = document.getElementById("posMedName").value;
         }
         return;
       }
@@ -571,13 +726,17 @@
 
     document.getElementById("addMedForm").addEventListener("submit", async (e) => {
       e.preventDefault();
+      const dosingType = document.getElementById("mDosingType").value;
+
       const medData = {
         trade_name: document.getElementById("mTrade").value,
         generic_name: document.getElementById("mGeneric").value,
         strength: document.getElementById("mStrength").value,
-        dose: document.getElementById("mDose").value,
-        frequency: document.getElementById("mFreq").value,
-        price: document.getElementById("mPrice").value
+        dosing_type: dosingType,
+        price: document.getElementById("mPrice").value,
+        dose: dosingType === "weight_based" ? document.getElementById("mDose").value : "",
+        frequency: dosingType === "weight_based" ? document.getElementById("mFreq").value : "",
+        age_brackets: dosingType === "age_based" ? getAgeBracketsFromUI('add') : []
       };
 
       const id = await dbEngine.add("medicine", medData);
