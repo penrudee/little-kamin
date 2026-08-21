@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LittleKaminPOS V.0.0.1G - Local-First Pharmacy POS</title>
+  <title>LittleKaminPOS - Local-First Pharmacy POS</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -33,7 +33,7 @@
   <!-- Nav Menu -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand" href="#">LittleKaminPOS</a>
+      <a class="navbar-brand" href="#">LittleKaminPOS V.0.0.1H</a>
       <div class="navbar-nav me-auto">
         <button class="nav-link btn btn-link" onclick="switchTab('posTab')">1. ขายยา & คำนวณขนาดยาเด็ก</button>
         <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า</button>
@@ -141,10 +141,10 @@
             <div class="row g-2 mb-2">
               <div class="col-md-3"><input type="text" id="mTrade" class="form-control" placeholder="Trade Name (ชื่อการค้า)" required></div>
               <div class="col-md-3"><input type="text" id="mGeneric" class="form-control" placeholder="Generic Name (ชื่อสามัญ)" required></div>
-              <div class="col-md-2"><input type="text" id="mStrength" class="form-control" placeholder="Strength (เช่น 67mg/1ml)" required></div>
+              <div class="col-md-2"><input type="text" id="mStrength" class="form-control" placeholder="Strength (เช่น 67mg/1ml หรือ 125mg/5ml)" required></div>
               <div class="col-md-2">
                 <select id="mDosingType" class="form-select" onchange="toggleDosingInputUI('add')">
-                  <option value="weight_based">คิดตามน้ำหนัก (mg/kg/day)</option>
+                  <option value="weight_based">คิดตามน้ำหนัก (Weight-based)</option>
                   <option value="age_based">คิดตามช่วงอายุ (Age-based)</option>
                 </select>
               </div>
@@ -153,7 +153,15 @@
 
             <!-- โหมดตามน้ำหนัก -->
             <div id="addWeightGroup" class="row g-2 mb-2">
-              <div class="col-md-6"><input type="number" step="0.1" id="mDose" class="form-control" placeholder="Dose (mg/kg/day)"></div>
+              <div class="col-md-3">
+                <select id="mDoseUnit" class="form-select">
+                  <option value="mg/kg/dose">mg/kg/dose (ต่อครั้ง)</option>
+                  <option value="mg/kg/day">mg/kg/day (รวมทั้งวัน)</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <input type="number" step="0.1" id="mDose" class="form-control" placeholder="จำนวนขนาดยา (Dose)">
+              </div>
               <div class="col-md-6">
                 <select id="mFreq" class="form-select">
                   <option value="3 ครั้งต่อวัน">3 ครั้งต่อวัน (ทุก 8 ชม.)</option>
@@ -161,6 +169,7 @@
                   <option value="2 ครั้งต่อวัน">2 ครั้งต่อวัน (ทุก 12 ชม.)</option>
                   <option value="1 ครั้งต่อวัน">1 ครั้งต่อวัน (ทุก 24 ชม.)</option>
                   <option value="ทุก 4 ชั่วโมง">ทุก 4 ชั่วโมง (6 ครั้งต่อวัน)</option>
+                  <option value="วันละ 1 ครั้ง">วันละ 1 ครั้ง</option>
                 </select>
               </div>
             </div>
@@ -211,12 +220,12 @@
     </div>
   </div>
 
-  <!-- Modal สำหรับแก้ไขข้อมูละยา -->
+  <!-- Modal สำหรับแก้ไขข้อมูลยา -->
   <div class="modal fade" id="editMedModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header bg-warning">
-          <h5 class="modal-title">แก้ไขข้อมูละยา</h5>
+          <h5 class="modal-title">แก้ไขข้อมูลยา</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
@@ -237,7 +246,7 @@
             <div class="col-md-4">
               <label class="form-label">ประเภทการคิดโดส</label>
               <select id="editMDosingType" class="form-select" onchange="toggleDosingInputUI('edit')">
-                <option value="weight_based">คิดตามน้ำหนัก (mg/kg/day)</option>
+                <option value="weight_based">คิดตามน้ำหนัก (Weight-based)</option>
                 <option value="age_based">คิดตามช่วงอายุ (Age-based)</option>
               </select>
             </div>
@@ -249,8 +258,15 @@
 
           <!-- โหมดตามน้ำหนัก (Edit) -->
           <div id="editWeightGroup" class="row g-2 mb-2">
-            <div class="col-md-6">
-              <label class="form-label">Dose (mg/kg/day)</label>
+            <div class="col-md-3">
+              <label class="form-label">หน่วยโดส</label>
+              <select id="editMDoseUnit" class="form-select">
+                <option value="mg/kg/dose">mg/kg/dose (ต่อครั้ง)</option>
+                <option value="mg/kg/day">mg/kg/day (รวมทั้งวัน)</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">จำนวนขนาดยา</label>
               <input type="number" step="0.1" id="editMDose" class="form-control">
             </div>
             <div class="col-md-6">
@@ -259,7 +275,9 @@
                 <option value="3 ครั้งต่อวัน">3 ครั้งต่อวัน (ทุก 8 ชม.)</option>
                 <option value="4 ครั้งต่อวัน">4 ครั้งต่อวัน (ทุก 6 ชม.)</option>
                 <option value="2 ครั้งต่อวัน">2 ครั้งต่อวัน (ทุก 12 ชม.)</option>
+                <option value="1 ครั้งต่อวัน">1 ครั้งต่อวัน (ทุก 24 ชม.)</option>
                 <option value="ทุก 4 ชั่วโมง">ทุก 4 ชั่วโมง (6 ครั้งต่อวัน)</option>
+                <option value="วันละ 1 ครั้ง">วันละ 1 ครั้ง</option>
               </select>
             </div>
           </div>
@@ -322,9 +340,8 @@
         syncEngine.initPeer(true);
       }
 
-      // ตั้งค่าเริ่มต้นของแถบช่วงอายุสำหรับฟอร์มเพิ่มยา
-      addAgeBracketRow('add', 0, 24, 20); // ต่ำกว่า 2 ปี -> 20 mg/dose
-      addAgeBracketRow('add', 24, 144, 40); // 2 - 12 ปี -> 40 mg/dose
+      addAgeBracketRow('add', 0, 24, 20); 
+      addAgeBracketRow('add', 24, 144, 40); 
 
       await refreshData();
     };
@@ -389,7 +406,6 @@
       stockTable.innerHTML = "";
       
       currentMeds.forEach(m => {
-        // Autocomplete ทั้ง Trade Name และ Generic Name
         medList.innerHTML += `<option value="${m.trade_name}">${m.generic_name || ''} | ${m.strength || ''} (${m.price}฿)</option>`;
         if (m.generic_name && m.generic_name.toLowerCase() !== m.trade_name.toLowerCase()) {
           medList.innerHTML += `<option value="${m.generic_name}">${m.trade_name} | ${m.strength || ''} (${m.price}฿)</option>`;
@@ -399,7 +415,8 @@
         if (m.dosing_type === "age_based" && m.age_brackets) {
           doseDisplay = m.age_brackets.map(b => `${(b.min_age_months/12).toFixed(0)}-${(b.max_age_months/12).toFixed(0)}ปี: ${b.dose_mg}mg`).join(", ");
         } else {
-          doseDisplay = `${m.dose || '-'} mg/kg/day (${m.frequency || '-'})`;
+          const unit = m.dose_unit || "mg/kg/dose";
+          doseDisplay = `${m.dose || '-'} ${unit} (${m.frequency || '-'})`;
         }
 
         stockTable.innerHTML += `
@@ -417,7 +434,6 @@
           </tr>`;
       });
 
-      // Autocomplete คนไข้ทั้ง ชื่อ และ เบอร์โทร
       const patList = document.getElementById("patientList");
       const patTable = document.getElementById("patientTableBody");
       patList.innerHTML = "";
@@ -442,6 +458,7 @@
       document.getElementById("editMDosingType").value = med.dosing_type || "weight_based";
       document.getElementById("editMPrice").value = med.price;
 
+      document.getElementById("editMDoseUnit").value = med.dose_unit || "mg/kg/dose";
       document.getElementById("editMDose").value = med.dose || "";
       document.getElementById("editMFreq").value = med.frequency || "3 ครั้งต่อวัน";
 
@@ -471,6 +488,7 @@
         strength: document.getElementById("editMStrength").value,
         dosing_type: dosingType,
         price: document.getElementById("editMPrice").value,
+        dose_unit: dosingType === "weight_based" ? document.getElementById("editMDoseUnit").value : "",
         dose: dosingType === "weight_based" ? document.getElementById("editMDose").value : "",
         frequency: dosingType === "weight_based" ? document.getElementById("editMFreq").value : "",
         age_brackets: dosingType === "age_based" ? getAgeBracketsFromUI('edit') : []
@@ -601,31 +619,35 @@
 
       // CASE 2: คิดตามน้ำหนัก (Weight-based Dosing)
       if (weight > 0 && med.dose) {
-        const dosePerKgDay = parseFloat(med.dose);
-        const totalMgPerDay = weight * dosePerKgDay;
-        let mlPerDayText = "";
+        const doseVal = parseFloat(med.dose);
+        const doseUnit = med.dose_unit || "mg/kg/dose";
+        let targetMgPerDose = 0;
+
+        let timesPerDay = 3;
+        if (med.frequency) {
+          if (med.frequency.includes("4 ครั้ง") || med.frequency.includes("ทุก 6")) timesPerDay = 4;
+          else if (med.frequency.includes("3 ครั้ง") || med.frequency.includes("ทุก 8")) timesPerDay = 3;
+          else if (med.frequency.includes("2 ครั้ง") || med.frequency.includes("ทุก 12")) timesPerDay = 2;
+          else if (med.frequency.includes("ทุก 4 ชั่วโมง")) timesPerDay = 6;
+          else if (med.frequency.includes("วันละ 1 ครั้ง")) timesPerDay = 1;
+        }
+
+        if (doseUnit === "mg/kg/dose") {
+          targetMgPerDose = weight * doseVal;
+        } else { // mg/kg/day
+          targetMgPerDose = (weight * doseVal) / timesPerDay;
+        }
+
         let mlPerDoseText = "";
-
         if (mgPerMl > 0) {
-          const totalMlPerDay = totalMgPerDay / mgPerMl;
-          mlPerDayText = `${totalMlPerDay.toFixed(2)} ml/วัน`;
-
-          let timesPerDay = 3;
-          if (med.frequency) {
-            if (med.frequency.includes("4 ครั้ง") || med.frequency.includes("ทุก 6")) timesPerDay = 4;
-            else if (med.frequency.includes("3 ครั้ง") || med.frequency.includes("ทุก 8")) timesPerDay = 3;
-            else if (med.frequency.includes("2 ครั้ง") || med.frequency.includes("ทุก 12")) timesPerDay = 2;
-            else if (med.frequency.includes("ทุก 4 ชั่วโมง")) timesPerDay = 6;
-          }
-
-          const mlPerDose = totalMlPerDay / timesPerDay;
+          const mlPerDose = targetMgPerDose / mgPerMl;
           mlPerDoseText = `<br>👉 <strong>ขนาดยาต่อมื้อ:</strong> <span class="text-danger fs-5 fw-bold">${mlPerDose.toFixed(2)} ml</span> (${med.frequency || 'วันละ ' + timesPerDay + ' ครั้ง'})`;
         }
 
         resultDiv.innerHTML = `
           <div>• ยา: <strong>${med.trade_name}</strong> (${med.strength || '-'})</div>
-          <div>• กำหนดโดส: <strong>${med.dose} mg/kg/day</strong> | น้ำหนักเด็ก: <strong>${weight} kg</strong></div>
-          <div>• ปริมาณยารวม: <strong>${totalMgPerDay.toFixed(1)} mg/วัน</strong> ${mlPerDayText ? '(' + mlPerDayText + ')' : ''}</div>
+          <div>• กำหนดโดส: <strong>${doseVal} ${doseUnit}</strong> | น้ำหนักเด็ก: <strong>${weight} kg</strong></div>
+          <div>• ปริมาณยามิลลิกรัม: <strong>${targetMgPerDose.toFixed(1)} mg/มื้อ</strong></div>
           ${mlPerDoseText}
         `;
         alertBox.classList.remove("d-none");
@@ -735,6 +757,7 @@
         strength: document.getElementById("mStrength").value,
         dosing_type: dosingType,
         price: document.getElementById("mPrice").value,
+        dose_unit: dosingType === "weight_based" ? document.getElementById("mDoseUnit").value : "",
         dose: dosingType === "weight_based" ? document.getElementById("mDose").value : "",
         frequency: dosingType === "weight_based" ? document.getElementById("mFreq").value : "",
         age_brackets: dosingType === "age_based" ? getAgeBracketsFromUI('add') : []
