@@ -6,7 +6,7 @@ class PharmacyDB {
 
   async init() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open("PharmacyLocalDB", 2);
+      const request = indexedDB.open("PharmacyLocalDB", 3);
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains("users")) {
@@ -60,7 +60,6 @@ class PharmacyDB {
     });
   }
 
-  // เพิ่มฟังก์ชันสำหรับลบข้อมูลตาม ID
   async delete(storeName, id) {
     return new Promise((resolve) => {
       const tx = this.db.transaction(storeName, "readwrite");
