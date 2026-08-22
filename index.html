@@ -97,7 +97,7 @@
 
               <div class="row g-2 mb-3">
                 <div class="col-md-6">
-                  <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อการค้า หรือ ชื่อสามัญทางยา..." oninput="calculateDose()" onkeypress="handleMedEnter(event)">
+                  <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อการค้า หรือ ชื่อสามัญทางยา... F9" oninput="calculateDose()" onkeypress="handleMedEnter(event)">
                   <datalist id="medList"></datalist>
                 </div>
                 <div class="col-md-2">
@@ -332,7 +332,13 @@
       }
       await dbEngine.init();
       editModalObj = new bootstrap.Modal(document.getElementById('editMedModal'));
-
+      const medNameInput = document.getElementById("posMedName");
+      window.addEventListener('keydown',function(event){
+        if (event.key === 'F9'){
+          event.preventDefault();
+          medNameInput.focus();
+        }
+      });
       const urlParams = new URLSearchParams(window.location.search);
       const syncId = urlParams.get("syncId");
 
