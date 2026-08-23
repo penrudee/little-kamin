@@ -59,9 +59,9 @@
         <!-- Patient Form -->
         <div class="col-md-4">
           <div class="card mb-3">
-            <div class="card-header bg-info text-white">ข้อมูลคนไข้</div>
+            <div class="card-header bg-info text-white">F1 "ข้อมูลคนไข้"</div>
             <div class="card-body">
-              <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ค้นหาชื่อ หรือ เบอร์โทรคนไข้...F2" oninput="checkExistingPatient()">
+              <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ค้นหาชื่อ หรือ เบอร์โทรคนไข้...F6" oninput="checkExistingPatient()">
               <datalist id="patientList"></datalist>
               
               <div class="row g-2 mb-2">
@@ -103,7 +103,7 @@
 
               <div class="row g-2 mb-3">
                 <div class="col-md-6">
-                  <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อการค้า หรือ ชื่อสามัญทางยา... F9" oninput="calculateDose()" onkeypress="handleMedEnter(event)">
+                  <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อการค้า หรือ ชื่อสามัญทางยา... F7" oninput="calculateDose()" onkeypress="handleMedEnter(event)">
                   <datalist id="medList"></datalist>
                 </div>
                 <div class="col-md-2">
@@ -141,7 +141,7 @@
     <!-- TAB 2: คลังสินค้า -->
     <div id="stockTab" class="tab-content d-none">
       <div class="card">
-        <div class="card-header bg-dark text-white">จัดการคลังสินค้า (Medicine Table)</div>
+        <div class="card-header bg-dark text-white">F2 "จัดการคลังสินค้า" (Medicine Table)</div>
         <div class="card-body">
           <form id="addMedForm" class="mb-4">
             <div class="row g-2 mb-2">
@@ -214,7 +214,7 @@
     <!-- TAB 3: ประวัติคนไข้ -->
     <div id="patientTab" class="tab-content d-none">
       <div class="card">
-        <div class="card-header bg-dark text-white">ประวัติคนไข้ (Patient History)</div>
+        <div class="card-header bg-dark text-white">F3"ประวัติคนไข้" (Patient History)</div>
         <div class="card-body">
           <table class="table table-striped">
             <thead>
@@ -339,19 +339,48 @@
       await dbEngine.init();
       editModalObj = new bootstrap.Modal(document.getElementById('editMedModal'));
       const medNameInput = document.getElementById("posMedName");
-      // F9 focus on trade name input
+      // F7 focus on trade name input
       window.addEventListener('keydown',function(event){
-        if (event.key === 'F9'){
+        if (event.key === 'F7'){
           event.preventDefault();
           medNameInput.focus();
         }
       });
-      // F2 focus on patient input
+      // F6 focus on patient input
       const patientNameInput = document.getElementById("posPatientName"); 
+      window.addEventListener('keydown',function(event){
+        if (event.key === 'F6'){
+          event.preventDefault();
+          patientNameInput.focus();
+        }
+      });
+      //F4 focus page setting
+      window.addEventListener('keydown',function(event){
+        if (event.key === 'F4'){
+          event.preventDefault();
+          window.location.href = 'settings.html';
+        }
+      });
+      // F3 focus on patient page
+      
+      window.addEventListener('keydown',function(event){
+        if (event.key === 'F3'){
+          event.preventDefault();
+          switchTab('patientTab');
+        }
+      });
+      // F2 focus on warehosue page 
       window.addEventListener('keydown',function(event){
         if (event.key === 'F2'){
           event.preventDefault();
-          patientNameInput.focus();
+          switchTab('stockTab');
+        }
+      });
+      // F1 focus on sale & ped dose page
+      window.addEventListener('keydown',function(event){
+        if (event.key === 'F1'){
+          event.preventDefault();
+          switchTab('posTab');
         }
       });
       const urlParams = new URLSearchParams(window.location.search);
