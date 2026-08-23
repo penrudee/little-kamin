@@ -130,7 +130,7 @@
 
               <div class="text-end">
                 <h3>ราคารวมทั้งสิ้น: <span id="grandTotal">0.00</span> บาท</h3>
-                <button class="btn btn-lg btn-success mt-2" onclick="checkout()">บันทึกการขาย (Checkout)</button>
+                <button class="btn btn-lg btn-success mt-2" onclick="checkout()">บันทึกการขาย F12</button>
               </div>
             </div>
           </div>
@@ -339,6 +339,13 @@
       await dbEngine.init();
       editModalObj = new bootstrap.Modal(document.getElementById('editMedModal'));
       const medNameInput = document.getElementById("posMedName");
+      // F12 check out
+      window.addEventListener('keydown',function(event){
+        if (event.key === 'F12'){
+          event.preventDefault();
+          checkout();
+        }
+      });
       // F7 focus on trade name input
       window.addEventListener('keydown',function(event){
         if (event.key === 'F7'){
