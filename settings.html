@@ -9,7 +9,7 @@
 </head>
 <body class="p-4 bg-light">
   <div class="container" style="max-width: 500px;">
-    <a href="index.html" class="btn btn-secondary mb-3">&larr; กลับหน้าหลัก</a>
+    <a href="index.html" class="btn btn-secondary mb-3">&larr;F1 "กลับหน้าหลัก"</a>
     <div class="card shadow-sm">
       <div class="card-body">
         <h5>เปลี่ยนรหัสผ่าน</h5>
@@ -44,6 +44,13 @@
         userObj.password = document.getElementById("newPassword").value;
         await dbEngine.update("users", userObj);
         alert("อัปเดตรหัสผ่านเรียบร้อยแล้ว");
+      }
+    });
+    // F1 กลับหน้าหลัก
+    window.addEventListener('keydown',function(event){
+      if (event.key === 'F1'){
+        event.preventDefault();
+        window.location.href = 'index.html';
       }
     });
   </script>
