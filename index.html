@@ -11,6 +11,9 @@
   
   <style>
     #printablePatientCard { display: none; }
+    #smalltext {
+      font-size:10 px;
+    }
     @media print {
       body * { visibility: hidden; }
       #printablePatientCard, #printablePatientCard * { visibility: visible; }
@@ -42,6 +45,9 @@
       </div>
       <span class="navbar-text text-warning" id="clientCountDisplay">
         การเชื่อมต่อ Active: 0 จุด
+      </span>
+      <span class="navbar-text text-secondary">
+        <small id="smalltext">version 0.0.1.10</small>
       </span>
     </div>
   </nav>
