@@ -19,8 +19,8 @@
         position: absolute;
         left: 0;
         top: 0;
-        width: 85mm;
-        height: 54mm;
+        width: 80mm;
+        height: 50mm;
         border: 2px solid #000;
         padding: 10px;
         border-radius: 8px;
@@ -75,7 +75,7 @@
             </div>
           </div>
 
-          <!-- Sync WebRTC QR -->
+          <!-- Sync Web QR -->
           <div class="card">
             <div class="card-header bg-secondary text-white">ซิงค์ฐานข้อมูล (P2P Smartphone)</div>
             <div class="card-body text-center">
@@ -333,10 +333,19 @@
       await dbEngine.init();
       editModalObj = new bootstrap.Modal(document.getElementById('editMedModal'));
       const medNameInput = document.getElementById("posMedName");
+      // F9 focus on trade name input
       window.addEventListener('keydown',function(event){
         if (event.key === 'F9'){
           event.preventDefault();
           medNameInput.focus();
+        }
+      });
+      // F2 focus on patient input
+      const patientNameInput = document.getElementById("posPatientName"); 
+      window.addEventListener('keydown',function(){
+        if(event.key === 'F2'){
+          event.preventDefault();
+          patientnameInput.focus();
         }
       });
       const urlParams = new URLSearchParams(window.location.search);
