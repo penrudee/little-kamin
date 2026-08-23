@@ -38,10 +38,10 @@
     <div class="container-fluid">
       <a class="navbar-brand" href="#">LittleKaminPOS</a>
       <div class="navbar-nav me-auto">
-        <button class="nav-link btn btn-link" onclick="switchTab('posTab')">1. ขายยา & คำนวณขนาดยาเด็ก</button>
-        <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า</button>
-        <button class="nav-link btn btn-link" onclick="switchTab('patientTab')">3. คนไข้ (Patient)</button>
-        <a class="nav-link" href="settings.html">4. ตั้งค่า</a>
+        <button class="nav-link btn btn-link" onclick="switchTab('posTab')">1. ขายยา & คำนวณขนาดยาเด็ก(F1)</button>
+        <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า(F2)</button>
+        <button class="nav-link btn btn-link" onclick="switchTab('patientTab')">3. คนไข้(F3)</button>
+        <a class="nav-link" href="settings.html">4. ตั้งค่า(F4)</a>
       </div>
       <span class="navbar-text text-warning" id="clientCountDisplay">
         การเชื่อมต่อ Active: 0 จุด
@@ -59,7 +59,7 @@
         <!-- Patient Form -->
         <div class="col-md-4">
           <div class="card mb-3">
-            <div class="card-header bg-info text-white">F1 "ข้อมูลคนไข้"</div>
+            <div class="card-header bg-info text-white">"ข้อมูลคนไข้"</div>
             <div class="card-body">
               <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ค้นหาชื่อ หรือ เบอร์โทรคนไข้...F6" oninput="checkExistingPatient()">
               <datalist id="patientList"></datalist>
