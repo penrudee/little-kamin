@@ -6,7 +6,7 @@ class PharmacyDB {
 
   async init() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open("PharmacyLocalDB", 3);
+      const request = indexedDB.open("PharmacyLocalDB", 4);
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains("users")) {
@@ -23,6 +23,11 @@ class PharmacyDB {
         }
         if (!db.objectStoreNames.contains("bill")) {
           db.createObjectStore("bill", { keyPath: "id", autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains("article")) {
+          // บทความที่ user (เภสัชกร) เขียนไว้ สำหรับแนบให้คนไข้อ่านตอนขายยา
+          const articleStore = db.createObjectStore("article", { keyPath: "id", autoIncrement: true });
+          articleStore.createIndex("topic", "topic", { unique: false });
         }
       };
       request.onsuccess = (e) => {

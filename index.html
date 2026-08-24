@@ -41,7 +41,8 @@
         <button class="nav-link btn btn-link" onclick="switchTab('posTab')">1. ขายยา & คำนวณขนาดยาเด็ก(F1)</button>
         <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า(F2)</button>
         <button class="nav-link btn btn-link" onclick="switchTab('patientTab')">3. คนไข้(F3)</button>
-        <a class="nav-link" href="settings.html">4. ตั้งค่า(F4)</a>
+        <button class="nav-link btn btn-link" onclick="switchTab('articleTab')">4. บทความ(F4)</button>
+        <a class="nav-link" href="settings.html">5. ตั้งค่า(F5)</a>
       </div>
       <span class="navbar-text text-warning" id="clientCountDisplay">
         การเชื่อมต่อ Active: 0 จุด
@@ -127,6 +128,16 @@
                 </thead>
                 <tbody id="cartTableBody"></tbody>
               </table>
+
+              <div class="card card-body bg-light mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <strong>📎 แนบบทความให้คนไข้อ่าน (ไม่บังคับ)</strong>
+                  <button type="button" class="nav-link btn btn-link p-0" onclick="switchTab('articleTab')">+ เขียนบทความใหม่</button>
+                </div>
+                <div id="articleAttachList" class="small">
+                  <div class="text-muted">ยังไม่มีบทความในระบบ</div>
+                </div>
+              </div>
 
               <div class="text-end">
                 <h3>ราคารวมทั้งสิ้น: <span id="grandTotal">0.00</span> บาท</h3>
@@ -222,6 +233,47 @@
             </thead>
             <tbody id="patientTableBody"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: บทความ (เขียนและแนบให้คนไข้อ่าน) -->
+    <div id="articleTab" class="tab-content d-none">
+      <div class="row">
+        <div class="col-md-5">
+          <div class="card mb-3">
+            <div class="card-header bg-dark text-white" id="articleFormTitle">F4 "เขียนบทความ" (New Article)</div>
+            <div class="card-body">
+              <input type="hidden" id="articleId">
+              <label class="form-label">หัวข้อ</label>
+              <input type="text" id="articleTopic" class="form-control mb-2" placeholder="เช่น วิธีปฏิบัติตัวและใช้ยาเมื่อเจ็บคอ">
+
+              <label class="form-label">สรุปย่อ <small class="text-muted">(จะแสดงในประวัติการซื้อของคนไข้)</small></label>
+              <textarea id="articleSummary" class="form-control mb-2" rows="2" placeholder="สรุปสั้นๆ 1-2 ประโยค"></textarea>
+
+              <label class="form-label">เนื้อหาเต็ม</label>
+              <div class="mb-1">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="wrapArticleText('**','**')"><strong>B</strong></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="wrapArticleText('*','*')"><em>I</em></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertArticleText('[ข้อความลิงก์](https://)')">🔗 ลิงก์</button>
+              </div>
+              <textarea id="articleContent" class="form-control mb-2" rows="8" placeholder="เนื้อหาบทความฉบับเต็ม รองรับ **ตัวหนา**, *ตัวเอียง* และ [ลิงก์](url)"></textarea>
+
+              <div class="d-flex gap-2">
+                <button class="btn btn-success w-100" onclick="saveArticle()">💾 บันทึกบทความ</button>
+                <button class="btn btn-outline-secondary" onclick="resetArticleForm()">ล้างฟอร์ม</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-7">
+          <div class="card">
+            <div class="card-header bg-primary text-white">คลังบทความทั้งหมด</div>
+            <div class="card-body" id="articleListBody">
+              <div class="text-muted text-center py-3">ยังไม่มีบทความ</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -328,6 +380,8 @@
   <script>
     let cart = [];
     let currentMeds = [];
+    let currentArticles = [];
+    let selectedArticleIds = [];
     let currentFoundPatient = null;
     let editModalObj = null;
 
@@ -361,9 +415,16 @@
           patientNameInput.focus();
         }
       });
-      //F4 focus page setting
+      //F4 focus on article page
       window.addEventListener('keydown',function(event){
         if (event.key === 'F4'){
+          event.preventDefault();
+          switchTab('articleTab');
+        }
+      });
+      //F5 focus page setting
+      window.addEventListener('keydown',function(event){
+        if (event.key === 'F5'){
           event.preventDefault();
           window.location.href = 'settings.html';
         }
@@ -458,6 +519,7 @@
     async function refreshData() {
       currentMeds = await dbEngine.getAll("medicine");
       const patients = await dbEngine.getAll("patient");
+      currentArticles = await dbEngine.getAll("article");
 
       const medList = document.getElementById("medList");
       const stockTable = document.getElementById("stockTableBody");
@@ -504,6 +566,155 @@
         }
         patTable.innerHTML += `<tr><td>${p.id}</td><td>${p.full_name}</td><td>${p.age || '-'}</td><td>${p.phone || '-'}</td><td>${p.weight || '-'} kg</td><td>${p.patient_special_id}</td></tr>`;
       });
+
+      renderArticleList();
+      renderArticleAttachList();
+    }
+
+    // ---------- บทความ (Articles) ----------
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.innerText = str == null ? '' : str;
+      return div.innerHTML;
+    }
+
+    function wrapArticleText(startTag, endTag) {
+      const textarea = document.getElementById('articleContent');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      const selectedText = text.substring(start, end);
+      const formattedText = startTag + selectedText + endTag;
+      textarea.value = text.substring(0, start) + formattedText + text.substring(end);
+      textarea.selectionStart = start;
+      textarea.selectionEnd = start + formattedText.length;
+      textarea.focus();
+    }
+
+    function insertArticleText(textToInsert) {
+      const textarea = document.getElementById('articleContent');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      textarea.value = text.substring(0, start) + textToInsert + text.substring(end);
+      textarea.selectionStart = textarea.selectionEnd = start + textToInsert.length;
+      textarea.focus();
+    }
+
+    function resetArticleForm() {
+      document.getElementById('articleId').value = '';
+      document.getElementById('articleTopic').value = '';
+      document.getElementById('articleSummary').value = '';
+      document.getElementById('articleContent').value = '';
+      document.getElementById('articleFormTitle').innerText = 'F4 "เขียนบทความ" (New Article)';
+    }
+
+    async function saveArticle() {
+      const idVal = document.getElementById('articleId').value;
+      const topic = document.getElementById('articleTopic').value.trim();
+      const summary = document.getElementById('articleSummary').value.trim();
+      const content = document.getElementById('articleContent').value.trim();
+
+      if (!topic || !content) {
+        alert('กรุณากรอกหัวข้อ และเนื้อหาบทความให้ครบถ้วน');
+        return;
+      }
+
+      const articleData = {
+        topic: topic,
+        summary: summary || (content.length > 120 ? content.slice(0, 120) + '…' : content),
+        content: content,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (idVal) {
+        articleData.id = parseInt(idVal);
+        articleData.createdAt = (currentArticles.find(a => a.id === articleData.id) || {}).createdAt || articleData.updatedAt;
+        await dbEngine.update("article", articleData);
+        syncEngine.broadcastData({ type: "SYNC_DB", store: "article", payload: articleData });
+      } else {
+        articleData.createdAt = articleData.updatedAt;
+        const id = await dbEngine.add("article", articleData);
+        articleData.id = id;
+        syncEngine.broadcastData({ type: "SYNC_DB", store: "article", payload: articleData });
+      }
+
+      resetArticleForm();
+      await refreshData();
+      alert('บันทึกบทความเรียบร้อยแล้ว!');
+    }
+
+    function editArticle(id) {
+      const a = currentArticles.find(x => x.id === id);
+      if (!a) return;
+      document.getElementById('articleId').value = a.id;
+      document.getElementById('articleTopic').value = a.topic;
+      document.getElementById('articleSummary').value = a.summary || '';
+      document.getElementById('articleContent').value = a.content || '';
+      document.getElementById('articleFormTitle').innerText = 'แก้ไขบทความ: ' + a.topic;
+      switchTab('articleTab');
+      document.getElementById('articleTopic').focus();
+    }
+
+    async function deleteArticleFn(id, topic) {
+      if (!confirm(`ต้องการลบบทความ "${topic}" ใช่หรือไม่? (บทความที่เคยแนบไปกับบิลเก่าจะยังคงอยู่ในประวัติของคนไข้)`)) return;
+      await dbEngine.delete("article", id);
+      syncEngine.broadcastData({ type: "DELETE_DB", store: "article", id: id });
+      selectedArticleIds = selectedArticleIds.filter(x => x !== id);
+      await refreshData();
+    }
+
+    function renderArticleList() {
+      const box = document.getElementById('articleListBody');
+      if (!box) return;
+      if (!currentArticles || currentArticles.length === 0) {
+        box.innerHTML = '<div class="text-muted text-center py-3">ยังไม่มีบทความ</div>';
+        return;
+      }
+      const sorted = [...currentArticles].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+      box.innerHTML = sorted.map(a => `
+        <div class="card mb-2">
+          <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-bold">${escapeHtml(a.topic)}</div>
+                <div class="text-muted small">${escapeHtml(a.summary || '')}</div>
+              </div>
+              <div class="text-nowrap ms-2">
+                <button class="btn btn-sm btn-warning" onclick="editArticle(${a.id})">แก้ไข</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteArticleFn(${a.id}, '${escapeHtml(a.topic).replace(/'/g, "\\'")}')">ลบ</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function toggleArticleAttach(id, checked) {
+      if (checked) {
+        if (!selectedArticleIds.includes(id)) selectedArticleIds.push(id);
+      } else {
+        selectedArticleIds = selectedArticleIds.filter(x => x !== id);
+      }
+    }
+
+    function renderArticleAttachList() {
+      const box = document.getElementById('articleAttachList');
+      if (!box) return;
+      if (!currentArticles || currentArticles.length === 0) {
+        box.innerHTML = '<div class="text-muted">ยังไม่มีบทความในระบบ ลองเขียนบทความก่อนได้ที่แท็บ "บทความ"</div>';
+        return;
+      }
+      box.innerHTML = currentArticles.map(a => `
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="attachArticle${a.id}"
+            ${selectedArticleIds.includes(a.id) ? 'checked' : ''}
+            onchange="toggleArticleAttach(${a.id}, this.checked)">
+          <label class="form-check-label" for="attachArticle${a.id}">
+            ${escapeHtml(a.topic)} <span class="text-muted">— ${escapeHtml(a.summary || '')}</span>
+          </label>
+        </div>
+      `).join('');
     }
 
     function openEditMedModal(id) {
@@ -856,12 +1067,19 @@
     async function checkout() {
       if (cart.length === 0) return alert("ยังไม่มีสินค้าในตะกร้า");
       
+      // เก็บสำเนาบทความ ณ เวลาที่แนบไว้ในบิล (self-contained) เพื่อไม่ให้ประวัติที่คนไข้เคยเห็น
+      // เปลี่ยนไปตามการแก้ไข/ลบบทความต้นฉบับในภายหลัง
+      const attachedArticles = currentArticles
+        .filter(a => selectedArticleIds.includes(a.id))
+        .map(a => ({ id: a.id, topic: a.topic, summary: a.summary, content: a.content }));
+
       const billData = {
         total: document.getElementById("grandTotal").innerText,
         patientName: document.getElementById("posPatientName").value,
         patientSpecialId: currentFoundPatient ? currentFoundPatient.patient_special_id : null,
         timestamp: new Date().toISOString(),
-        items: cart
+        items: cart,
+        articles: attachedArticles
       };
 
       const id = await dbEngine.add("bill", billData);
@@ -871,7 +1089,9 @@
       
       alert("บันทึกการขายสำเร็จ!");
       cart = [];
+      selectedArticleIds = [];
       renderCart();
+      renderArticleAttachList();
     }
   </script>
 </body>
