@@ -134,7 +134,9 @@
                   <strong>📎 แนบบทความให้คนไข้อ่าน (ไม่บังคับ)</strong>
                   <button type="button" class="nav-link btn btn-link p-0" onclick="switchTab('articleTab')">+ เขียนบทความใหม่</button>
                 </div>
-                <div id="articleAttachList" class="small">
+                <input type="text" id="articleAttachSearch" class="form-control form-control-sm mb-2"
+                  placeholder="🔍 ค้นหาบทความ (พิมพ์หัวข้อหรือคำในสรุปย่อ)..." oninput="renderArticleAttachList()">
+                <div id="articleAttachList" class="small" style="max-height: 220px; overflow-y: auto;">
                   <div class="text-muted">ยังไม่มีบทความในระบบ</div>
                 </div>
               </div>
@@ -705,7 +707,22 @@
         box.innerHTML = '<div class="text-muted">ยังไม่มีบทความในระบบ ลองเขียนบทความก่อนได้ที่แท็บ "บทความ"</div>';
         return;
       }
-      box.innerHTML = currentArticles.map(a => `
+
+      const searchInput = document.getElementById('articleAttachSearch');
+      const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+      const filtered = keyword
+        ? currentArticles.filter(a =>
+            (a.topic || '').toLowerCase().includes(keyword) ||
+            (a.summary || '').toLowerCase().includes(keyword))
+        : currentArticles;
+
+      if (filtered.length === 0) {
+        box.innerHTML = `<div class="text-muted">ไม่พบบทความที่ตรงกับ "${escapeHtml(keyword)}"</div>`;
+        return;
+      }
+
+      box.innerHTML = filtered.map(a => `
         <div class="form-check">
           <input class="form-check-input" type="checkbox" id="attachArticle${a.id}"
             ${selectedArticleIds.includes(a.id) ? 'checked' : ''}
