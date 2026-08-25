@@ -36,7 +36,7 @@
   <!-- Nav Menu -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand" href="#">LittleKaminPOS</a>
+      <a class="navbar-brand" id="pharmacyNameBrand" href="#">LittleKaminPOS</a>
       <div class="navbar-nav me-auto">
         <button class="nav-link btn btn-link" onclick="switchTab('posTab')">1. ขายยา & คำนวณขนาดยาเด็ก(F1)</button>
         <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า(F2)</button>
@@ -364,7 +364,7 @@
   <!-- บัตรสั่งพิมพ์ -->
   <div id="printablePatientCard">
     <div style="font-size: 12px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 5px;">
-      บัตรประจำตัวคนไข้ - ร้านยา LittleKaminPOS
+      บัตรประจำตัวคนไข้ - <span id="printPharmacyName">ร้านยา LittleKaminPOS</span>
     </div>
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <div style="font-size: 11px; line-height: 1.4;">
@@ -393,6 +393,7 @@
         return;
       }
       await dbEngine.init();
+      await loadPharmacyName();
       editModalObj = new bootstrap.Modal(document.getElementById('editMedModal'));
       const medNameInput = document.getElementById("posMedName");
       // F12 check out
@@ -467,6 +468,15 @@
 
       await refreshData();
     };
+
+    async function loadPharmacyName() {
+      const settings = await dbEngine.getAll("settings");
+      const setting = settings.find(s => s.key === "pharmacy_name");
+      const name = setting && setting.value ? setting.value : "LittleKaminPOS";
+      document.title = `${name} - Local-First Pharmacy POS`;
+      document.getElementById("pharmacyNameBrand").innerText = name;
+      document.getElementById("printPharmacyName").innerText = `ร้านยา ${name}`;
+    }
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('d-none'));

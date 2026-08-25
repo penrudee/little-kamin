@@ -10,6 +10,20 @@
 <body class="p-4 bg-light">
   <div class="container" style="max-width: 500px;">
     <a href="index.html" class="btn btn-secondary mb-3">&larr;F1 "กลับหน้าหลัก"</a>
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h5>ตั้งค่าชื่อร้านยา</h5>
+        <form id="pharmacyNameForm">
+          <div class="mb-3">
+            <label class="form-label">ชื่อร้านยา</label>
+            <input type="text" id="pharmacyName" class="form-control" placeholder="เช่น ร้านยาลิตเติ้ลกามิน" required>
+            <div class="form-text">ชื่อนี้จะแสดงที่แถบเมนูด้านบนและบนบัตรประจำตัวคนไข้ที่พิมพ์ออกมา</div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">บันทึกชื่อร้านยา</button>
+        </form>
+      </div>
+    </div>
+
     <div class="card shadow-sm">
       <div class="card-body">
         <h5>เปลี่ยนรหัสผ่าน</h5>
@@ -33,6 +47,22 @@
     const currentUser = sessionStorage.getItem("loggedInUser");
     if (!currentUser) window.location.href = "login.html";
     document.getElementById("settingUser").value = currentUser;
+
+    (async () => {
+      await dbEngine.init();
+      const settings = await dbEngine.getAll("settings");
+      const pharmacyNameSetting = settings.find(s => s.key === "pharmacy_name");
+      document.getElementById("pharmacyName").value = pharmacyNameSetting ? pharmacyNameSetting.value : "";
+    })();
+
+    document.getElementById("pharmacyNameForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("pharmacyName").value.trim();
+      if (!name) return;
+      await dbEngine.init();
+      await dbEngine.update("settings", { key: "pharmacy_name", value: name });
+      alert("บันทึกชื่อร้านยาเรียบร้อยแล้ว");
+    });
 
     document.getElementById("changePasswordForm").addEventListener("submit", async (e) => {
       e.preventDefault();

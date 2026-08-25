@@ -6,9 +6,13 @@ class PharmacyDB {
 
   async init() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open("PharmacyLocalDB", 4);
+      const request = indexedDB.open("PharmacyLocalDB", 5);
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
+        if (!db.objectStoreNames.contains("settings")) {
+          // ค่าตั้งค่าระบบ เช่น ชื่อร้านยา (key/value store)
+          db.createObjectStore("settings", { keyPath: "key" });
+        }
         if (!db.objectStoreNames.contains("users")) {
           const userStore = db.createObjectStore("users", { keyPath: "id", autoIncrement: true });
           userStore.createIndex("username", "username", { unique: true });
