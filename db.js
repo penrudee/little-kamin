@@ -77,5 +77,14 @@ class PharmacyDB {
       req.onsuccess = () => resolve(true);
     });
   }
+
+  async clear(storeName) {
+    return new Promise((resolve) => {
+      const tx = this.db.transaction(storeName, "readwrite");
+      const store = tx.objectStore(storeName);
+      const req = store.clear();
+      req.onsuccess = () => resolve(true);
+    });
+  }
 }
 const dbEngine = new PharmacyDB();

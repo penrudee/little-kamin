@@ -40,6 +40,30 @@
         </form>
       </div>
     </div>
+
+    <div class="card shadow-sm mt-3">
+      <div class="card-body">
+        <h5>สำรองข้อมูล & กู้คืนข้อมูล (USB Thumb Drive)</h5>
+        <p class="text-muted small mb-3">ระบบนี้เก็บข้อมูลไว้ในเครื่อง/เบราว์เซอร์นี้เท่านั้น แนะนำให้สำรองข้อมูลเป็นระยะ แล้วนำไฟล์ไปเก็บไว้ใน USB Thumb Drive เพื่อป้องกันข้อมูลสูญหาย</p>
+
+        <h6>1. สำรองข้อมูล (Export)</h6>
+        <button type="button" class="btn btn-outline-primary w-100 mb-1" onclick="exportBackup()">⬇️ ดาวน์โหลดไฟล์สำรองข้อมูล</button>
+        <div class="form-text mb-3">ระบบจะดาวน์โหลดไฟล์ .json กรุณาคัดลอก/ย้ายไฟล์นั้นไปเก็บไว้ใน USB Thumb Drive</div>
+
+        <hr>
+
+        <h6>2. กู้คืนข้อมูล (Restore)</h6>
+        <input type="file" id="restoreFileInput" accept="application/json,.json" class="form-control mb-2">
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="checkbox" id="restoreClearFirst">
+          <label class="form-check-label" for="restoreClearFirst">
+            ลบข้อมูลเดิมทั้งหมดก่อนกู้คืน (แนะนำเมื่อย้ายไปเครื่องใหม่)
+          </label>
+        </div>
+        <button type="button" id="restoreBackupBtn" class="btn btn-outline-danger w-100">⬆️ กู้คืนข้อมูลจากไฟล์สำรอง</button>
+        <div class="form-text text-danger mt-1">คำเตือน: การกู้คืนข้อมูลอาจเขียนทับหรือลบข้อมูลปัจจุบัน กรุณาตรวจสอบไฟล์ให้ถูกต้องก่อนกดยืนยัน</div>
+      </div>
+    </div>
   </div>
 
   <script src="db.js"></script>
@@ -76,6 +100,66 @@
         alert("อัปเดตรหัสผ่านเรียบร้อยแล้ว");
       }
     });
+    // ---------- สำรองข้อมูล (Export) ----------
+    const BACKUP_STORES = ["users", "medicine", "patient", "bill", "article", "settings"];
+
+    async function exportBackup() {
+      await dbEngine.init();
+      const backup = { app: "little-kamin", version: 1, exportedAt: new Date().toISOString(), data: {} };
+      for (const store of BACKUP_STORES) {
+        try {
+          backup.data[store] = await dbEngine.getAll(store);
+        } catch (err) {
+          backup.data[store] = [];
+        }
+      }
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const ts = new Date().toISOString().replace(/[:T]/g, "-").split(".")[0];
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `little-kamin-backup-${ts}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      alert("ดาวน์โหลดไฟล์สำรองข้อมูลเรียบร้อยแล้ว กรุณาย้ายไฟล์นี้ไปเก็บไว้ใน USB Thumb Drive");
+    }
+
+    // ---------- กู้คืนข้อมูล (Restore) ----------
+    document.getElementById("restoreBackupBtn").addEventListener("click", async () => {
+      const fileInput = document.getElementById("restoreFileInput");
+      const file = fileInput.files[0];
+      if (!file) return alert("กรุณาเลือกไฟล์สำรองข้อมูล (.json) จาก USB Thumb Drive ก่อน");
+
+      const clearFirst = document.getElementById("restoreClearFirst").checked;
+      const confirmMsg = clearFirst
+        ? "คุณต้องการลบข้อมูลปัจจุบันทั้งหมด แล้วกู้คืนจากไฟล์สำรองนี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้"
+        : "คุณต้องการกู้คืนข้อมูลจากไฟล์สำรองนี้ใช่หรือไม่? (รายการที่มี ID ตรงกันจะถูกเขียนทับ)";
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const text = await file.text();
+        const backup = JSON.parse(text);
+        if (!backup || typeof backup.data !== "object") throw new Error("invalid backup file");
+
+        await dbEngine.init();
+        for (const store of BACKUP_STORES) {
+          if (clearFirst) await dbEngine.clear(store);
+          const records = Array.isArray(backup.data[store]) ? backup.data[store] : [];
+          for (const record of records) {
+            await dbEngine.update(store, record);
+          }
+        }
+
+        alert("กู้คืนข้อมูลสำเร็จ! ระบบจะโหลดหน้าใหม่");
+        window.location.reload();
+      } catch (err) {
+        console.error(err);
+        alert("ไม่สามารถกู้คืนข้อมูลได้ ไฟล์อาจเสียหายหรือไม่ใช่ไฟล์สำรองข้อมูลของระบบนี้");
+      }
+    });
+
     // F1 กลับหน้าหลัก
     window.addEventListener('keydown',function(event){
       if (event.key === 'F1'){
