@@ -79,6 +79,11 @@
                 <small class="text-muted d-block mb-2" id="patientCodeDisplay"></small>
                 <button class="btn btn-sm btn-dark w-100" onclick="printPatientCard()">🖨️ พิมพ์บัตรประจำตัวคนไข้</button>
               </div>
+
+              <div id="patientHistoryBox" class="mt-2 d-none">
+                <h6 class="fw-bold small mb-2">📜 ประวัติการซื้อยาก่อนหน้า (ใหม่ &rarr; เก่า)</h6>
+                <div id="patientHistoryList" style="max-height: 320px; overflow-y: auto;"></div>
+              </div>
             </div>
           </div>
 
@@ -816,6 +821,7 @@
       if (!inputVal && !phoneVal) {
         qrBox.classList.add("d-none");
         currentFoundPatient = null;
+        hidePatientHistory();
         return;
       }
 
@@ -842,10 +848,53 @@
 
         qrBox.classList.remove("d-none");
         calculateDose();
+        await loadPatientHistory(found.patient_special_id);
       } else {
         qrBox.classList.add("d-none");
         currentFoundPatient = null;
+        hidePatientHistory();
       }
+    }
+
+    async function loadPatientHistory(patientSpecialId) {
+      const historyBox = document.getElementById("patientHistoryBox");
+      const listEl = document.getElementById("patientHistoryList");
+
+      const bills = await dbEngine.getAll("bill");
+      const patientBills = bills
+        .filter(b => b.patientSpecialId === patientSpecialId)
+        .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0)); // ใหม่ -> เก่า
+
+      historyBox.classList.remove("d-none");
+
+      if (patientBills.length === 0) {
+        listEl.innerHTML = `<div class="text-muted small">ยังไม่มีประวัติการซื้อยาของคนไข้รายนี้</div>`;
+        return;
+      }
+
+      listEl.innerHTML = patientBills.map(bill => {
+        const dateStr = bill.timestamp ? new Date(bill.timestamp).toLocaleString("th-TH") : "ไม่ระบุวันที่";
+        const itemsHtml = (bill.items || []).map(item =>
+          `<li class="list-group-item d-flex justify-content-between align-items-center py-1 px-2">
+             <span>${escapeHtml(item.name)} <small class="text-muted">x${item.qty}</small></span>
+             <span class="small">${(item.price * item.qty).toFixed(2)} บ.</span>
+           </li>`
+        ).join("");
+
+        return `
+          <div class="card mb-2 border">
+            <div class="card-header bg-light py-1 px-2 d-flex justify-content-between align-items-center">
+              <small class="fw-bold text-primary">🗓️ ${dateStr}</small>
+              <small class="fw-bold text-success">${bill.total || "0.00"} บาท</small>
+            </div>
+            <ul class="list-group list-group-flush">${itemsHtml}</ul>
+          </div>`;
+      }).join("");
+    }
+
+    function hidePatientHistory() {
+      document.getElementById("patientHistoryBox").classList.add("d-none");
+      document.getElementById("patientHistoryList").innerHTML = "";
     }
 
     function printPatientCard() {
