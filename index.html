@@ -11,136 +11,155 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
   <style>
-    #printablePatientCard,
-    #printableMedLabels {
-      display: none;
+  #printablePatientCard,
+  #printableMedLabels {
+    display: none;
+  }
+
+  #smalltext {
+    font-size: 10px;
+  }
+
+  /* --- สไตล์ของฉลากยา (ขนาด 80x50mm) --- */
+  .medLabelPage {
+    width: 80mm;
+    height: 50mm;
+    box-sizing: border-box;
+    padding: 3mm;
+    border: 1px solid #000;
+    font-family: Arial, sans-serif;
+    font-size: 9px;
+    line-height: 1.3;
+    overflow: hidden;
+    background: #fff;
+    color: #000000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .medLabelHeader {
+    border-bottom: 1.5px solid #000000;
+    padding-bottom: 1mm;
+    margin-bottom: 1mm;
+  }
+
+  .medLabelPharmacyName {
+    font-weight: bold;
+    font-size: 11px;
+    color: #000000;
+  }
+
+  .medLabelPharmacyAddress {
+    font-size: 8px;
+    color: #000000; /* เปลี่ยนจาก #333 เป็นสีดำสนิท */
+    font-weight: bold;
+  }
+
+  .medLabelDate,
+  .medLabelPatient {
+    font-size: 9px;
+    color: #000000;
+    font-weight: bold;
+  }
+
+  .medLabelMedName {
+    font-size: 10px;
+    font-weight: bold;
+    color: #000000;
+    margin: 1mm 0;
+  }
+
+  .medLabelLine {
+    margin-top: 0.5mm;
+    color: #000000;
+    font-weight: bold;
+  }
+
+  .medLabelWarning {
+    color: #000000; /* เปลี่ยนจาก #b00000 เป็นสีดำสนิท */
+    font-weight: bold;
+    margin-top: 1mm;
+  }
+
+  .medLabelFooter {
+    text-align: right;
+    font-size: 8px;
+    font-weight: bold;
+    color: #000000;
+    margin-top: 1mm;
+    border-top: 1px solid #000000; /* เปลี่ยนจาก dashed #999 เป็น solid #000 */
+    padding-top: 1mm;
+  }
+
+  /* --- ตั้งค่าสำหรับการพิมพ์ (Print Styles) --- */
+  @media print {
+    body.printing-patient-card>nav,
+    body.printing-patient-card>.container-fluid,
+    body.printing-med-labels>nav,
+    body.printing-med-labels>.container-fluid {
+      display: none !important;
     }
 
-    #smalltext {
-      font-size: 10 px;
+    html,
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #fff !important;
+    }
+
+    /* บังคับทุกข้อความและเส้นขอบในหน้าพิมพ์ฉลากยาให้เป็นสีดำสนิท ตัวหนา 100% */
+    #printableMedLabels,
+    #printableMedLabels * {
+      color: #000000 !important;
+      font-weight: bold !important;
+      border-color: #000000 !important;
+      text-shadow: none !important;
+      -webkit-font-smoothing: none !important;
+      -moz-osx-font-smoothing: grayscale !important;
+    }
+
+    body.printing-patient-card #printablePatientCard {
+      display: flex !important;
+      flex-direction: column;
+      justify-content: center;
+      width: 80mm;
+      height: 50mm;
+      margin: 0;
+      border: 2px solid #000;
+      color: #000000 !important;
+      font-weight: bold !important;
+      padding: 10px;
+      border-radius: 8px;
+      background-color: #ffffff !important;
+      box-sizing: border-box;
+      -webkit-font-smoothing: none !important;
+      -moz-osx-font-smoothing: grayscale !important;
+    }
+
+    body.printing-med-labels #printableMedLabels {
+      display: block !important;
+      margin: 0;
     }
 
     .medLabelPage {
-      width: 80mm;
-      height: 50mm;
-      box-sizing: border-box;
-      padding: 3mm;
-      border: 1px solid #000;
-      font-family: Arial, sans-serif;
-      font-size: 9px;
-      line-height: 1.3;
-      overflow: hidden;
-      background: #fff;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+      margin: 0;
+      page-break-after: always;
+      break-after: page;
+      page-break-inside: avoid;
     }
 
-    .medLabelHeader {
-      border-bottom: 1px solid #000;
-      padding-bottom: 1mm;
-      margin-bottom: 1mm;
+    .medLabelPage:last-child {
+      page-break-after: auto;
+      break-after: auto;
     }
 
-    .medLabelPharmacyName {
-      font-weight: bold;
-      font-size: 11px;
+    @page {
+      size: 80mm 50mm;
+      margin: 0;
     }
-
-    .medLabelPharmacyAddress {
-      font-size: 8px;
-      color: #333;
-    }
-
-    .medLabelDate,
-    .medLabelPatient {
-      font-size: 9px;
-    }
-
-    .medLabelMedName {
-      font-size: 10px;
-      margin: 1mm 0;
-    }
-
-    .medLabelLine {
-      margin-top: 0.5mm;
-    }
-
-    .medLabelWarning {
-      color: #b00000;
-      font-weight: bold;
-      margin-top: 1mm;
-    }
-
-    .medLabelFooter {
-      text-align: right;
-      font-size: 8px;
-      margin-top: 1mm;
-      border-top: 1px dashed #999;
-      padding-top: 1mm;
-    }
-
-    @media print {
-      /* ซ่อนส่วนอื่นของหน้าเว็บทั้งหมดด้วย display:none (ไม่ใช่ visibility:hidden)
-         เพื่อไม่ให้เหลือพื้นที่ว่างของ nav/แท็บต่างๆ ไปแทรกก่อนฉลาก/บัตร ทำให้ฉลากไม่อยู่กึ่งกลาง
-         และไม่พอดีกับกระดาษ */
-
-      body.printing-patient-card>nav,
-      body.printing-patient-card>.container-fluid,
-      body.printing-med-labels>nav,
-      body.printing-med-labels>.container-fluid {
-        display: none !important;
-      }
-
-      html,
-      body {
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #fff !important;
-      }
-
-      body.printing-patient-card #printablePatientCard {
-        display: flex !important;
-        flex-direction: column;
-        justify-content: center;
-        width: 80mm;
-        height: 50mm;
-        margin: 0;
-        border: 2px solid #000;
-        color: black !important;
-        padding: 10px;
-        border-radius: 8px;
-        background-color: #ffffff !important;
-        box-sizing: border-box;
-        /* ลดปัญหาตัวอักษรเบลอจากการทำ anti-aliasing */
-        -webkit-font-smoothing: none !important;
-        -moz-osx-font-smoothing: grayscale !important;
-      }
-
-      body.printing-med-labels #printableMedLabels {
-        display: block !important;
-        margin: 0;
-      }
-
-      .medLabelPage {
-        margin: 0;
-        page-break-after: always;
-        break-after: page;
-        page-break-inside: avoid;
-
-      }
-
-      .medLabelPage:last-child {
-        page-break-after: auto;
-        break-after: auto;
-      }
-
-      @page {
-        size: 80mm 50mm;
-        margin: 0;
-      }
-    }
-  </style>
+  }
+</style>
 </head>
 
 <body class="bg-light">
