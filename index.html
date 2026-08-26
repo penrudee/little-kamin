@@ -107,10 +107,14 @@
         height: 50mm;
         margin: 0;
         border: 2px solid #000;
+        color: black !important;
         padding: 10px;
         border-radius: 8px;
-        background: #fff;
+        background-color: #ffffff !important;
         box-sizing: border-box;
+        /* ลดปัญหาตัวอักษรเบลอจากการทำ anti-aliasing */
+        -webkit-font-smoothing: none !important;
+        -moz-osx-font-smoothing: grayscale !important;
       }
 
       body.printing-med-labels #printableMedLabels {
@@ -123,11 +127,7 @@
         page-break-after: always;
         break-after: page;
         page-break-inside: avoid;
-        color: #000000 !important;
-        background-color: #ffffff !important;
-        /* ลดปัญหาตัวอักษรเบลอจากการทำ anti-aliasing */
-        -webkit-font-smoothing: none !important;
-        -moz-osx-font-smoothing: grayscale !important;
+
       }
 
       .medLabelPage:last-child {
