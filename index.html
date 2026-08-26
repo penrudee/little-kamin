@@ -19,7 +19,7 @@
   #smalltext {
     font-size: 10px;
   }
-
+  
   /* --- สไตล์ของฉลากยา (ขนาด 80x50mm) --- */
   .medLabelPage {
     width: 80mm;
@@ -107,7 +107,13 @@
       padding: 0 !important;
       background: #fff !important;
     }
-
+.modal, 
+  .modal-backdrop, 
+  .fade, 
+  .show {
+    display: none !important;
+    opacity: 1 !important;
+  }
     /* บังคับทุกข้อความและเส้นขอบในหน้าพิมพ์ฉลากยาให้เป็นสีดำสนิท ตัวหนา 100% */
     #printableMedLabels,
     #printableMedLabels * {
