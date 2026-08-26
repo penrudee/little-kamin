@@ -25,8 +25,10 @@
       line-height: 1.3;
       overflow: hidden;
       background: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
-    .medLabelPage + .medLabelPage { page-break-before: always; }
     .medLabelHeader { border-bottom: 1px solid #000; padding-bottom: 1mm; margin-bottom: 1mm; }
     .medLabelPharmacyName { font-weight: bold; font-size: 11px; }
     .medLabelPharmacyAddress { font-size: 8px; color: #333; }
@@ -37,31 +39,50 @@
     .medLabelFooter { text-align: right; font-size: 8px; margin-top: 1mm; border-top: 1px dashed #999; padding-top: 1mm; }
 
     @media print {
-      body.printing-patient-card * { visibility: hidden; }
-      body.printing-patient-card #printablePatientCard,
-      body.printing-patient-card #printablePatientCard * { visibility: visible; }
+      /* ซ่อนส่วนอื่นของหน้าเว็บทั้งหมดด้วย display:none (ไม่ใช่ visibility:hidden)
+         เพื่อไม่ให้เหลือพื้นที่ว่างของ nav/แท็บต่างๆ ไปแทรกก่อนฉลาก/บัตร ทำให้ฉลากไม่อยู่กึ่งกลาง
+         และไม่พอดีกับกระดาษ */
+      body.printing-patient-card > nav,
+      body.printing-patient-card > .container-fluid,
+      body.printing-med-labels > nav,
+      body.printing-med-labels > .container-fluid {
+        display: none !important;
+      }
+
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+      }
+
       body.printing-patient-card #printablePatientCard {
-        display: block !important;
-        position: absolute;
-        left: 0;
-        top: 0;
+        display: flex !important;
+        flex-direction: column;
+        justify-content: center;
         width: 80mm;
         height: 50mm;
+        margin: 0;
         border: 2px solid #000;
         padding: 10px;
         border-radius: 8px;
         background: #fff;
+        box-sizing: border-box;
       }
 
-      body.printing-med-labels * { visibility: hidden; }
-      body.printing-med-labels #printableMedLabels,
-      body.printing-med-labels #printableMedLabels * { visibility: visible; }
       body.printing-med-labels #printableMedLabels {
         display: block !important;
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 80mm;
+        margin: 0;
+      }
+
+      .medLabelPage {
+        margin: 0;
+        page-break-after: always;
+        break-after: page;
+        page-break-inside: avoid;
+      }
+      .medLabelPage:last-child {
+        page-break-after: auto;
+        break-after: auto;
       }
 
       @page { size: 80mm 50mm; margin: 0; }
