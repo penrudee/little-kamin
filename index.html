@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,12 +9,17 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  
+
   <style>
-    #printablePatientCard, #printableMedLabels { display: none; }
-    #smalltext {
-      font-size:10 px;
+    #printablePatientCard,
+    #printableMedLabels {
+      display: none;
     }
+
+    #smalltext {
+      font-size: 10 px;
+    }
+
     .medLabelPage {
       width: 80mm;
       height: 50mm;
@@ -29,27 +35,65 @@
       flex-direction: column;
       justify-content: center;
     }
-    .medLabelHeader { border-bottom: 1px solid #000; padding-bottom: 1mm; margin-bottom: 1mm; }
-    .medLabelPharmacyName { font-weight: bold; font-size: 11px; }
-    .medLabelPharmacyAddress { font-size: 8px; color: #333; }
-    .medLabelDate, .medLabelPatient { font-size: 9px; }
-    .medLabelMedName { font-size: 10px; margin: 1mm 0; }
-    .medLabelLine { margin-top: 0.5mm; }
-    .medLabelWarning { color: #b00000; font-weight: bold; margin-top: 1mm; }
-    .medLabelFooter { text-align: right; font-size: 8px; margin-top: 1mm; border-top: 1px dashed #999; padding-top: 1mm; }
+
+    .medLabelHeader {
+      border-bottom: 1px solid #000;
+      padding-bottom: 1mm;
+      margin-bottom: 1mm;
+    }
+
+    .medLabelPharmacyName {
+      font-weight: bold;
+      font-size: 11px;
+    }
+
+    .medLabelPharmacyAddress {
+      font-size: 8px;
+      color: #333;
+    }
+
+    .medLabelDate,
+    .medLabelPatient {
+      font-size: 9px;
+    }
+
+    .medLabelMedName {
+      font-size: 10px;
+      margin: 1mm 0;
+    }
+
+    .medLabelLine {
+      margin-top: 0.5mm;
+    }
+
+    .medLabelWarning {
+      color: #b00000;
+      font-weight: bold;
+      margin-top: 1mm;
+    }
+
+    .medLabelFooter {
+      text-align: right;
+      font-size: 8px;
+      margin-top: 1mm;
+      border-top: 1px dashed #999;
+      padding-top: 1mm;
+    }
 
     @media print {
       /* ซ่อนส่วนอื่นของหน้าเว็บทั้งหมดด้วย display:none (ไม่ใช่ visibility:hidden)
          เพื่อไม่ให้เหลือพื้นที่ว่างของ nav/แท็บต่างๆ ไปแทรกก่อนฉลาก/บัตร ทำให้ฉลากไม่อยู่กึ่งกลาง
          และไม่พอดีกับกระดาษ */
-      body.printing-patient-card > nav,
-      body.printing-patient-card > .container-fluid,
-      body.printing-med-labels > nav,
-      body.printing-med-labels > .container-fluid {
+
+      body.printing-patient-card>nav,
+      body.printing-patient-card>.container-fluid,
+      body.printing-med-labels>nav,
+      body.printing-med-labels>.container-fluid {
         display: none !important;
       }
 
-      html, body {
+      html,
+      body {
         margin: 0 !important;
         padding: 0 !important;
         background: #fff !important;
@@ -79,16 +123,26 @@
         page-break-after: always;
         break-after: page;
         page-break-inside: avoid;
+        color: #000000 !important;
+        background-color: #ffffff !important;
+        /* ลดปัญหาตัวอักษรเบลอจากการทำ anti-aliasing */
+        -webkit-font-smoothing: none !important;
+        -moz-osx-font-smoothing: grayscale !important;
       }
+
       .medLabelPage:last-child {
         page-break-after: auto;
         break-after: auto;
       }
 
-      @page { size: 80mm 50mm; margin: 0; }
+      @page {
+        size: 80mm 50mm;
+        margin: 0;
+      }
     }
   </style>
 </head>
+
 <body class="bg-light">
   <!-- Nav Menu -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -119,22 +173,28 @@
           <div class="card mb-3">
             <div class="card-header bg-info text-white">"ข้อมูลคนไข้"</div>
             <div class="card-body">
-              <input type="text" id="posPatientName" list="patientList" class="form-control mb-2" placeholder="ค้นหาชื่อ หรือ เบอร์โทรคนไข้...F6" oninput="checkExistingPatient()">
+              <input type="text" id="posPatientName" list="patientList" class="form-control mb-2"
+                placeholder="ค้นหาชื่อ หรือ เบอร์โทรคนไข้...F6" oninput="checkExistingPatient()">
               <datalist id="patientList"></datalist>
-              
+
               <div class="row g-2 mb-2">
-                <div class="col-6"><input type="number" step="0.1" id="posAge" class="form-control" placeholder="อายุ (ปี)" oninput="calculateDose()"></div>
-                <div class="col-6"><input type="number" step="0.1" id="posWeight" class="form-control" placeholder="น้ำหนัก (kg)" oninput="calculateDose()"></div>
+                <div class="col-6"><input type="number" step="0.1" id="posAge" class="form-control"
+                    placeholder="อายุ (ปี)" oninput="calculateDose()"></div>
+                <div class="col-6"><input type="number" step="0.1" id="posWeight" class="form-control"
+                    placeholder="น้ำหนัก (kg)" oninput="calculateDose()"></div>
               </div>
-              <input type="text" id="posPhone" class="form-control mb-2" placeholder="เบอร์โทรศัพท์" oninput="checkExistingPatient()">
-              
-              <button class="btn btn-sm btn-outline-primary w-100 mb-2" onclick="addNewPatientModal()">+ บันทึกประวัติคนไข้ใหม่</button>
+              <input type="text" id="posPhone" class="form-control mb-2" placeholder="เบอร์โทรศัพท์"
+                oninput="checkExistingPatient()">
+
+              <button class="btn btn-sm btn-outline-primary w-100 mb-2" onclick="addNewPatientModal()">+
+                บันทึกประวัติคนไข้ใหม่</button>
 
               <div id="patientQrBox" class="card card-body bg-light text-center d-none mt-2">
                 <span class="badge bg-success mb-2">พบประวัติคนไข้ในระบบ</span>
                 <div id="patientCardQr" class="d-flex justify-content-center mb-2"></div>
                 <small class="text-muted d-block mb-2" id="patientCodeDisplay"></small>
-                <button class="btn btn-sm btn-dark w-100" onclick="printPatientCard()">🖨️ พิมพ์บัตรประจำตัวคนไข้</button>
+                <button class="btn btn-sm btn-dark w-100" onclick="printPatientCard()">🖨️
+                  พิมพ์บัตรประจำตัวคนไข้</button>
               </div>
 
               <div id="patientHistoryBox" class="mt-2 d-none">
@@ -166,11 +226,14 @@
 
               <div class="row g-2 mb-3">
                 <div class="col-md-6">
-                  <input type="text" id="posMedName" list="medList" class="form-control" placeholder="พิมพ์ชื่อการค้า หรือ ชื่อสามัญทางยา... F7" oninput="calculateDose()" onkeypress="handleMedEnter(event)">
+                  <input type="text" id="posMedName" list="medList" class="form-control"
+                    placeholder="พิมพ์ชื่อการค้า หรือ ชื่อสามัญทางยา... F7" oninput="calculateDose()"
+                    onkeypress="handleMedEnter(event)">
                   <datalist id="medList"></datalist>
                 </div>
                 <div class="col-md-2">
-                  <input type="number" id="posQty" class="form-control" value="1" placeholder="จำนวน" oninput="calculateDose()">
+                  <input type="number" id="posQty" class="form-control" value="1" placeholder="จำนวน"
+                    oninput="calculateDose()">
                 </div>
                 <div class="col-md-4">
                   <button class="btn btn-success w-100" onclick="addMedToCart()">เพิ่มรายการ</button>
@@ -195,7 +258,8 @@
               <div class="card card-body bg-light mb-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <strong>📎 แนบบทความให้คนไข้อ่าน (ไม่บังคับ)</strong>
-                  <button type="button" class="nav-link btn btn-link p-0" onclick="switchTab('articleTab')">+ เขียนบทความใหม่</button>
+                  <button type="button" class="nav-link btn btn-link p-0" onclick="switchTab('articleTab')">+
+                    เขียนบทความใหม่</button>
                 </div>
                 <input type="text" id="articleAttachSearch" class="form-control form-control-sm mb-2"
                   placeholder="🔍 ค้นหาบทความ (พิมพ์หัวข้อหรือคำในสรุปย่อ)..." oninput="renderArticleAttachList()">
@@ -206,7 +270,8 @@
 
               <div class="text-end">
                 <h3>ราคารวมทั้งสิ้น: <span id="grandTotal">0.00</span> บาท</h3>
-                <button class="btn btn-lg btn-outline-dark mt-2 me-2" onclick="openMedLabelEditModal()">🖨️ พิมพ์ฉลากยา (F11)</button>
+                <button class="btn btn-lg btn-outline-dark mt-2 me-2" onclick="openMedLabelEditModal()">🖨️ พิมพ์ฉลากยา
+                  (F11)</button>
                 <button class="btn btn-lg btn-success mt-2" onclick="checkout()">บันทึกการขาย F12</button>
               </div>
             </div>
@@ -222,16 +287,20 @@
         <div class="card-body">
           <form id="addMedForm" class="mb-4">
             <div class="row g-2 mb-2">
-              <div class="col-md-3"><input type="text" id="mTrade" class="form-control" placeholder="Trade Name (ชื่อการค้า)" required></div>
-              <div class="col-md-3"><input type="text" id="mGeneric" class="form-control" placeholder="Generic Name (ชื่อสามัญ)" required></div>
-              <div class="col-md-2"><input type="text" id="mStrength" class="form-control" placeholder="Strength (เช่น 5mcg/1ml หรือ 125mg/5ml)" required></div>
+              <div class="col-md-3"><input type="text" id="mTrade" class="form-control"
+                  placeholder="Trade Name (ชื่อการค้า)" required></div>
+              <div class="col-md-3"><input type="text" id="mGeneric" class="form-control"
+                  placeholder="Generic Name (ชื่อสามัญ)" required></div>
+              <div class="col-md-2"><input type="text" id="mStrength" class="form-control"
+                  placeholder="Strength (เช่น 5mcg/1ml หรือ 125mg/5ml)" required></div>
               <div class="col-md-2">
                 <select id="mDosingType" class="form-select" onchange="toggleDosingInputUI('add')">
                   <option value="weight_based">คิดตามน้ำหนัก (Weight-based)</option>
                   <option value="age_based">คิดตามช่วงอายุ (Age-based)</option>
                 </select>
               </div>
-              <div class="col-md-2"><input type="number" id="mPrice" class="form-control" placeholder="ราคา (บาท)" required></div>
+              <div class="col-md-2"><input type="number" id="mPrice" class="form-control" placeholder="ราคา (บาท)"
+                  required></div>
             </div>
 
             <!-- โหมดตามน้ำหนัก -->
@@ -262,7 +331,8 @@
             <div id="addAgeGroup" class="card card-body bg-light mb-2 d-none">
               <div class="d-flex justify-content-between align-items-center mb-2">
                 <span class="fw-bold">กําหนดช่วงอายุ (Age Brackets):</span>
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addAgeBracketRow('add')">+ เพิ่มช่วงอายุ</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addAgeBracketRow('add')">+
+                  เพิ่มช่วงอายุ</button>
               </div>
               <div id="addAgeBracketContainer"></div>
             </div>
@@ -272,15 +342,18 @@
               <div class="fw-bold mb-2">🏷️ ข้อมูลฉลากยา (แสดงตอนพิมพ์ฉลากยา ขนาด 80x50mm)</div>
               <div class="mb-2">
                 <label class="form-label small mb-1">ข้อบ่งใช้</label>
-                <textarea id="mLabelIndication" class="form-control" rows="1" placeholder="เช่น บรรเทาปวด ลดไข้"></textarea>
+                <textarea id="mLabelIndication" class="form-control" rows="1"
+                  placeholder="เช่น บรรเทาปวด ลดไข้"></textarea>
               </div>
               <div class="mb-2">
                 <label class="form-label small mb-1">วิธีใช้</label>
-                <textarea id="mLabelUsage" class="form-control" rows="1" placeholder="เช่น รับประทานครั้งละ 1 เม็ด วันละ 3 ครั้ง หลังอาหาร"></textarea>
+                <textarea id="mLabelUsage" class="form-control" rows="1"
+                  placeholder="เช่น รับประทานครั้งละ 1 เม็ด วันละ 3 ครั้ง หลังอาหาร"></textarea>
               </div>
               <div class="mb-0">
                 <label class="form-label small mb-1">คำเตือน</label>
-                <textarea id="mLabelWarning" class="form-control" rows="1" placeholder="เช่น ห้ามรับประทานเกินขนาดที่กำหนด"></textarea>
+                <textarea id="mLabelWarning" class="form-control" rows="1"
+                  placeholder="เช่น ห้ามรับประทานเกินขนาดที่กำหนด"></textarea>
               </div>
             </div>
 
@@ -312,7 +385,14 @@
         <div class="card-body">
           <table class="table table-striped">
             <thead>
-              <tr><th>ID</th><th>ชื่อ-นามสกุล</th><th>อายุ</th><th>เบอร์โทร</th><th>น้ำหนัก</th><th>Special QR ID</th></tr>
+              <tr>
+                <th>ID</th>
+                <th>ชื่อ-นามสกุล</th>
+                <th>อายุ</th>
+                <th>เบอร์โทร</th>
+                <th>น้ำหนัก</th>
+                <th>Special QR ID</th>
+              </tr>
             </thead>
             <tbody id="patientTableBody"></tbody>
           </table>
@@ -329,18 +409,25 @@
             <div class="card-body">
               <input type="hidden" id="articleId">
               <label class="form-label">หัวข้อ</label>
-              <input type="text" id="articleTopic" class="form-control mb-2" placeholder="เช่น วิธีปฏิบัติตัวและใช้ยาเมื่อเจ็บคอ">
+              <input type="text" id="articleTopic" class="form-control mb-2"
+                placeholder="เช่น วิธีปฏิบัติตัวและใช้ยาเมื่อเจ็บคอ">
 
-              <label class="form-label">สรุปย่อ <small class="text-muted">(จะแสดงในประวัติการซื้อของคนไข้)</small></label>
-              <textarea id="articleSummary" class="form-control mb-2" rows="2" placeholder="สรุปสั้นๆ 1-2 ประโยค"></textarea>
+              <label class="form-label">สรุปย่อ <small
+                  class="text-muted">(จะแสดงในประวัติการซื้อของคนไข้)</small></label>
+              <textarea id="articleSummary" class="form-control mb-2" rows="2"
+                placeholder="สรุปสั้นๆ 1-2 ประโยค"></textarea>
 
               <label class="form-label">เนื้อหาเต็ม</label>
               <div class="mb-1">
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="wrapArticleText('**','**')"><strong>B</strong></button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="wrapArticleText('*','*')"><em>I</em></button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertArticleText('[ข้อความลิงก์](https://)')">🔗 ลิงก์</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                  onclick="wrapArticleText('**','**')"><strong>B</strong></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                  onclick="wrapArticleText('*','*')"><em>I</em></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                  onclick="insertArticleText('[ข้อความลิงก์](https://)')">🔗 ลิงก์</button>
               </div>
-              <textarea id="articleContent" class="form-control mb-2" rows="8" placeholder="เนื้อหาบทความฉบับเต็ม รองรับ **ตัวหนา**, *ตัวเอียง* และ [ลิงก์](url)"></textarea>
+              <textarea id="articleContent" class="form-control mb-2" rows="8"
+                placeholder="เนื้อหาบทความฉบับเต็ม รองรับ **ตัวหนา**, *ตัวเอียง* และ [ลิงก์](url)"></textarea>
 
               <div class="d-flex gap-2">
                 <button class="btn btn-success w-100" onclick="saveArticle()">💾 บันทึกบทความ</button>
@@ -429,7 +516,8 @@
           <div id="editAgeGroup" class="card card-body bg-light mb-2 d-none">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <span class="fw-bold">กําหนดช่วงอายุ (Age Brackets):</span>
-              <button type="button" class="btn btn-sm btn-outline-primary" onclick="addAgeBracketRow('edit')">+ เพิ่มช่วงอายุ</button>
+              <button type="button" class="btn btn-sm btn-outline-primary" onclick="addAgeBracketRow('edit')">+
+                เพิ่มช่วงอายุ</button>
             </div>
             <div id="editAgeBracketContainer"></div>
           </div>
@@ -468,7 +556,8 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <div class="alert alert-secondary small mb-3">ตรวจสอบและแก้ไขข้อความบนฉลากยาแต่ละรายการได้ตามต้องการ ก่อนสั่งพิมพ์ (ขนาดกระดาษ 80x50mm ต่อ 1 ใบ)</div>
+          <div class="alert alert-secondary small mb-3">ตรวจสอบและแก้ไขข้อความบนฉลากยาแต่ละรายการได้ตามต้องการ
+            ก่อนสั่งพิมพ์ (ขนาดกระดาษ 80x50mm ต่อ 1 ใบ)</div>
           <div class="accordion" id="medLabelEditAccordion"></div>
         </div>
         <div class="modal-footer">
@@ -481,7 +570,8 @@
 
   <!-- บัตรสั่งพิมพ์ -->
   <div id="printablePatientCard">
-    <div style="font-size: 12px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 5px;">
+    <div
+      style="font-size: 12px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 5px;">
       บัตรประจำตัวคนไข้ - <span id="printPharmacyName">ร้านยา LittleKaminPOS</span>
     </div>
     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -526,71 +616,71 @@
       medLabelEditModalObj = new bootstrap.Modal(document.getElementById('medLabelEditModal'));
       const medNameInput = document.getElementById("posMedName");
       // F12 check out
-      window.addEventListener('keydown',function(event){
-        if (event.key === 'F12'){
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'F12') {
           event.preventDefault();
           checkout();
         }
       });
       // F7 focus on trade name input
-      window.addEventListener('keydown',function(event){
-        if (event.key === 'F7'){
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'F7') {
           event.preventDefault();
           medNameInput.focus();
         }
       });
       // F11 เปิดหน้าต่างตรวจสอบ/แก้ไขฉลากยาก่อนพิมพ์
-      window.addEventListener('keydown',function(event){
-        if (event.key === 'F11'){
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'F11') {
           event.preventDefault();
           openMedLabelEditModal();
         }
       });
       // เคลียร์คลาสสำหรับการพิมพ์หลังพิมพ์เสร็จ/ยกเลิก
-      window.addEventListener('afterprint', function(){
+      window.addEventListener('afterprint', function () {
         document.body.classList.remove('printing-patient-card');
         document.body.classList.remove('printing-med-labels');
       });
       // F6 focus on patient input
-      const patientNameInput = document.getElementById("posPatientName"); 
-      window.addEventListener('keydown',function(event){
-        if (event.key === 'F6'){
+      const patientNameInput = document.getElementById("posPatientName");
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'F6') {
           event.preventDefault();
           patientNameInput.focus();
         }
       });
       //F4 focus on article page
-      window.addEventListener('keydown',function(event){
-        if (event.key === 'F4'){
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'F4') {
           event.preventDefault();
           switchTab('articleTab');
         }
       });
       //F5 focus page setting
-      window.addEventListener('keydown',function(event){
-        if (event.key === 'F5'){
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'F5') {
           event.preventDefault();
           window.location.href = 'settings.html';
         }
       });
       // F3 focus on patient page
-      
-      window.addEventListener('keydown',function(event){
-        if (event.key === 'F3'){
+
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'F3') {
           event.preventDefault();
           switchTab('patientTab');
         }
       });
       // F2 focus on warehosue page 
-      window.addEventListener('keydown',function(event){
-        if (event.key === 'F2'){
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'F2') {
           event.preventDefault();
           switchTab('stockTab');
         }
       });
       // F1 focus on sale & ped dose page
-      window.addEventListener('keydown',function(event){
-        if (event.key === 'F1'){
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'F1') {
           event.preventDefault();
           switchTab('posTab');
         }
@@ -604,8 +694,8 @@
         syncEngine.initPeer(true);
       }
 
-      addAgeBracketRow('add', 0, 24, 20); 
-      addAgeBracketRow('add', 24, 144, 40); 
+      addAgeBracketRow('add', 0, 24, 20);
+      addAgeBracketRow('add', 24, 144, 40);
 
       await refreshData();
     };
@@ -670,7 +760,7 @@
         const minM = parseFloat(r.querySelector('.br-min').value) || 0;
         const maxM = parseFloat(r.querySelector('.br-max').value) || 0;
         const dose = parseFloat(r.querySelector('.br-dose').value) || 0;
-        brackets.push({ min_age_months: minM, max_age_months: maxM, dose_mg: dose });
+        brackets.push({min_age_months: minM, max_age_months: maxM, dose_mg: dose});
       });
       return brackets;
     }
@@ -684,7 +774,7 @@
       const stockTable = document.getElementById("stockTableBody");
       medList.innerHTML = "";
       stockTable.innerHTML = "";
-      
+
       currentMeds.forEach(m => {
         medList.innerHTML += `<option value="${m.trade_name}">${m.generic_name || ''} | ${m.strength || ''} (${m.price}฿)</option>`;
         if (m.generic_name && m.generic_name.toLowerCase() !== m.trade_name.toLowerCase()) {
@@ -693,7 +783,7 @@
 
         let doseDisplay = "";
         if (m.dosing_type === "age_based" && m.age_brackets) {
-          doseDisplay = m.age_brackets.map(b => `${(b.min_age_months/12).toFixed(0)}-${(b.max_age_months/12).toFixed(0)}ปี: ${b.dose_mg}mg`).join(", ");
+          doseDisplay = m.age_brackets.map(b => `${(b.min_age_months / 12).toFixed(0)}-${(b.max_age_months / 12).toFixed(0)}ปี: ${b.dose_mg}mg`).join(", ");
         } else {
           const unit = m.dose_unit || "mg/kg/dose";
           doseDisplay = `${m.dose || '-'} ${unit} (${m.frequency || '-'})`;
@@ -790,12 +880,12 @@
         articleData.id = parseInt(idVal);
         articleData.createdAt = (currentArticles.find(a => a.id === articleData.id) || {}).createdAt || articleData.updatedAt;
         await dbEngine.update("article", articleData);
-        syncEngine.broadcastData({ type: "SYNC_DB", store: "article", payload: articleData });
+        syncEngine.broadcastData({type: "SYNC_DB", store: "article", payload: articleData});
       } else {
         articleData.createdAt = articleData.updatedAt;
         const id = await dbEngine.add("article", articleData);
         articleData.id = id;
-        syncEngine.broadcastData({ type: "SYNC_DB", store: "article", payload: articleData });
+        syncEngine.broadcastData({type: "SYNC_DB", store: "article", payload: articleData});
       }
 
       resetArticleForm();
@@ -818,7 +908,7 @@
     async function deleteArticleFn(id, topic) {
       if (!confirm(`ต้องการลบบทความ "${topic}" ใช่หรือไม่? (บทความที่เคยแนบไปกับบิลเก่าจะยังคงอยู่ในประวัติของคนไข้)`)) return;
       await dbEngine.delete("article", id);
-      syncEngine.broadcastData({ type: "DELETE_DB", store: "article", id: id });
+      syncEngine.broadcastData({type: "DELETE_DB", store: "article", id: id});
       selectedArticleIds = selectedArticleIds.filter(x => x !== id);
       await refreshData();
     }
@@ -870,8 +960,8 @@
 
       const filtered = keyword
         ? currentArticles.filter(a =>
-            (a.topic || '').toLowerCase().includes(keyword) ||
-            (a.summary || '').toLowerCase().includes(keyword))
+          (a.topic || '').toLowerCase().includes(keyword) ||
+          (a.summary || '').toLowerCase().includes(keyword))
         : currentArticles;
 
       if (filtered.length === 0) {
@@ -946,7 +1036,7 @@
       };
 
       await dbEngine.update("medicine", medData);
-      syncEngine.broadcastData({ type: "SYNC_DB", store: "medicine", payload: medData });
+      syncEngine.broadcastData({type: "SYNC_DB", store: "medicine", payload: medData});
 
       editModalObj.hide();
       await refreshData();
@@ -956,7 +1046,7 @@
     async function deleteMedicine(id, tradeName) {
       if (confirm(`คุณต้องการลบรายการยา "${tradeName}" ออกจากคลังใช่หรือไม่?`)) {
         await dbEngine.delete("medicine", id);
-        syncEngine.broadcastData({ type: "DELETE_DB", store: "medicine", id: id });
+        syncEngine.broadcastData({type: "DELETE_DB", store: "medicine", id: id});
         await refreshData();
         alert("ลบรายการยาสำเร็จ!");
       }
@@ -975,8 +1065,8 @@
       }
 
       const patients = await dbEngine.getAll("patient");
-      const found = patients.find(p => 
-        p.full_name.toLowerCase() === inputVal || 
+      const found = patients.find(p =>
+        p.full_name.toLowerCase() === inputVal ||
         (p.phone && p.phone === inputVal) ||
         (p.phone && p.phone === phoneVal)
       );
@@ -990,10 +1080,10 @@
         document.getElementById("patientCodeDisplay").innerText = "รหัสคนไข้: " + found.patient_special_id;
 
         const patientHistoryUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}patient_history.html?hostId=${syncEngine.peer ? syncEngine.peer.id : ''}&patientId=${found.patient_special_id}`;
-        
+
         const qrContainer = document.getElementById("patientCardQr");
         qrContainer.innerHTML = "";
-        new QRCode(qrContainer, { text: patientHistoryUrl, width: 100, height: 100 });
+        new QRCode(qrContainer, {text: patientHistoryUrl, width: 100, height: 100});
 
         qrBox.classList.remove("d-none");
         calculateDose();
@@ -1056,7 +1146,7 @@
       const printQr = document.getElementById("printQrCode");
       printQr.innerHTML = "";
       const patientHistoryUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}patient_history.html?hostId=${syncEngine.peer ? syncEngine.peer.id : ''}&patientId=${currentFoundPatient.patient_special_id}`;
-      new QRCode(printQr, { text: patientHistoryUrl, width: 80, height: 80 });
+      new QRCode(printQr, {text: patientHistoryUrl, width: 80, height: 80});
 
       document.body.classList.add('printing-patient-card');
       window.print();
@@ -1072,7 +1162,7 @@
       const patientNameRaw = (currentFoundPatient && currentFoundPatient.full_name)
         || document.getElementById("posPatientName").value.trim();
       const defaultPatientName = patientNameRaw || "ลูกค้า";
-      const saleDateDefault = new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
+      const saleDateDefault = new Date().toLocaleDateString("th-TH", {year: "numeric", month: "long", day: "numeric"});
       const dispenserDefault = pharmacistName || currentUser || "-";
 
       labelEditData = selectedLabelMedIds
@@ -1210,8 +1300,8 @@
         return;
       }
 
-      const med = currentMeds.find(m => 
-        m.trade_name.toLowerCase() === medName || 
+      const med = currentMeds.find(m =>
+        m.trade_name.toLowerCase() === medName ||
         (m.generic_name && m.generic_name.toLowerCase() === medName)
       );
 
@@ -1247,7 +1337,7 @@
 
           resultDiv.innerHTML = `
             <div>• ยา: <strong>${med.trade_name}</strong> (${med.strength || '-'})</div>
-            <div>• เกณฑ์คำนวณ: <strong>ตามช่วงอายุ (${(bracket.min_age_months/12).toFixed(0)} - ${(bracket.max_age_months/12).toFixed(0)} ปี)</strong></div>
+            <div>• เกณฑ์คำนวณ: <strong>ตามช่วงอายุ (${(bracket.min_age_months / 12).toFixed(0)} - ${(bracket.max_age_months / 12).toFixed(0)} ปี)</strong></div>
             ${mlText}
           `;
           alertBox.classList.remove("d-none");
@@ -1329,7 +1419,7 @@
       const id = await dbEngine.add("patient", patientData);
       patientData.id = id;
 
-      syncEngine.broadcastData({ type: "SYNC_DB", store: "patient", payload: patientData });
+      syncEngine.broadcastData({type: "SYNC_DB", store: "patient", payload: patientData});
       await refreshData();
       await checkExistingPatient();
       alert(`บันทึกประวัติคนไข้ "${name}" เรียบร้อยแล้ว`);
@@ -1342,9 +1432,9 @@
     function addMedToCart() {
       const name = document.getElementById("posMedName").value.trim().toLowerCase();
       const qty = parseInt(document.getElementById("posQty").value) || 1;
-      
-      const med = currentMeds.find(m => 
-        m.trade_name.toLowerCase() === name || 
+
+      const med = currentMeds.find(m =>
+        m.trade_name.toLowerCase() === name ||
         (m.generic_name && m.generic_name.toLowerCase() === name)
       );
 
@@ -1360,7 +1450,7 @@
       if (existing) {
         existing.qty += qty;
       } else {
-        cart.push({ id: med.id, name: med.trade_name, price: parseFloat(med.price) || 0, qty: qty });
+        cart.push({id: med.id, name: med.trade_name, price: parseFloat(med.price) || 0, qty: qty});
       }
 
       renderCart();
@@ -1435,7 +1525,7 @@
       const id = await dbEngine.add("medicine", medData);
       medData.id = id;
 
-      syncEngine.broadcastData({ type: "SYNC_DB", store: "medicine", payload: medData });
+      syncEngine.broadcastData({type: "SYNC_DB", store: "medicine", payload: medData});
 
       e.target.reset();
       await refreshData();
@@ -1444,12 +1534,12 @@
 
     async function checkout() {
       if (cart.length === 0) return alert("ยังไม่มีสินค้าในตะกร้า");
-      
+
       // เก็บสำเนาบทความ ณ เวลาที่แนบไว้ในบิล (self-contained) เพื่อไม่ให้ประวัติที่คนไข้เคยเห็น
       // เปลี่ยนไปตามการแก้ไข/ลบบทความต้นฉบับในภายหลัง
       const attachedArticles = currentArticles
         .filter(a => selectedArticleIds.includes(a.id))
-        .map(a => ({ id: a.id, topic: a.topic, summary: a.summary, content: a.content }));
+        .map(a => ({id: a.id, topic: a.topic, summary: a.summary, content: a.content}));
 
       const billData = {
         total: document.getElementById("grandTotal").innerText,
@@ -1463,8 +1553,8 @@
       const id = await dbEngine.add("bill", billData);
       billData.id = id;
 
-      syncEngine.broadcastData({ type: "SYNC_DB", store: "bill", payload: billData });
-      
+      syncEngine.broadcastData({type: "SYNC_DB", store: "bill", payload: billData});
+
       alert("บันทึกการขายสำเร็จ!");
       cart = [];
       selectedArticleIds = [];
@@ -1474,4 +1564,5 @@
     }
   </script>
 </body>
+
 </html>
