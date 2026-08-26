@@ -206,7 +206,7 @@
 
               <div class="text-end">
                 <h3>ราคารวมทั้งสิ้น: <span id="grandTotal">0.00</span> บาท</h3>
-                <button class="btn btn-lg btn-outline-dark mt-2 me-2" onclick="printMedicineLabels()">🖨️ พิมพ์ฉลากยา (F11)</button>
+                <button class="btn btn-lg btn-outline-dark mt-2 me-2" onclick="openMedLabelEditModal()">🖨️ พิมพ์ฉลากยา (F11)</button>
                 <button class="btn btn-lg btn-success mt-2" onclick="checkout()">บันทึกการขาย F12</button>
               </div>
             </div>
@@ -459,6 +459,26 @@
     </div>
   </div>
 
+  <!-- Modal สำหรับตรวจสอบ/แก้ไขฉลากยาก่อนพิมพ์ -->
+  <div class="modal fade" id="medLabelEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title">🏷️ ตรวจสอบ/แก้ไขฉลากยาก่อนพิมพ์</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-secondary small mb-3">ตรวจสอบและแก้ไขข้อความบนฉลากยาแต่ละรายการได้ตามต้องการ ก่อนสั่งพิมพ์ (ขนาดกระดาษ 80x50mm ต่อ 1 ใบ)</div>
+          <div class="accordion" id="medLabelEditAccordion"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="button" class="btn btn-primary" onclick="confirmPrintMedLabels()">🖨️ พิมพ์ฉลากยา</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- บัตรสั่งพิมพ์ -->
   <div id="printablePatientCard">
     <div style="font-size: 12px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 5px;">
@@ -488,6 +508,8 @@
     let selectedLabelMedIds = [];
     let currentFoundPatient = null;
     let editModalObj = null;
+    let medLabelEditModalObj = null;
+    let labelEditData = [];
     let pharmacyName = "LittleKaminPOS";
     let pharmacyAddress = "";
     let pharmacistName = "";
@@ -501,6 +523,7 @@
       await dbEngine.init();
       await loadPharmacyName();
       editModalObj = new bootstrap.Modal(document.getElementById('editMedModal'));
+      medLabelEditModalObj = new bootstrap.Modal(document.getElementById('medLabelEditModal'));
       const medNameInput = document.getElementById("posMedName");
       // F12 check out
       window.addEventListener('keydown',function(event){
@@ -516,11 +539,11 @@
           medNameInput.focus();
         }
       });
-      // F11 พิมพ์ฉลากยา
+      // F11 เปิดหน้าต่างตรวจสอบ/แก้ไขฉลากยาก่อนพิมพ์
       window.addEventListener('keydown',function(event){
         if (event.key === 'F11'){
           event.preventDefault();
-          printMedicineLabels();
+          openMedLabelEditModal();
         }
       });
       // เคลียร์คลาสสำหรับการพิมพ์หลังพิมพ์เสร็จ/ยกเลิก
@@ -1040,51 +1063,136 @@
     }
 
     // ---------- พิมพ์ฉลากยา (Medicine Label Printing, 80x50mm ต่อรายการ) ----------
-    function printMedicineLabels() {
+    // ขั้นที่ 1: เปิด modal ให้ตรวจสอบ/แก้ไขข้อความบนฉลากก่อนพิมพ์จริง
+    function openMedLabelEditModal() {
       if (selectedLabelMedIds.length === 0) {
         return alert("กรุณาติ๊กเลือกยาในตะกร้าที่ต้องการพิมพ์ฉลาก (ช่อง 🏷️ พิมพ์ฉลาก) ก่อน");
       }
 
+      const patientNameRaw = (currentFoundPatient && currentFoundPatient.full_name)
+        || document.getElementById("posPatientName").value.trim();
+      const defaultPatientName = patientNameRaw || "ลูกค้า";
+      const saleDateDefault = new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
+      const dispenserDefault = pharmacistName || currentUser || "-";
+
+      labelEditData = selectedLabelMedIds
+        .map(medId => currentMeds.find(m => m.id === medId))
+        .filter(Boolean)
+        .map(med => ({
+          medId: med.id,
+          pharmacy_name: pharmacyName,
+          pharmacy_address: pharmacyAddress,
+          sale_date: saleDateDefault,
+          patient_name: defaultPatientName,
+          trade_name: med.trade_name,
+          generic_name: med.generic_name || "",
+          indication: med.label_indication || "",
+          usage: med.label_usage || "",
+          warning: med.label_warning || "",
+          dispenser: dispenserDefault
+        }));
+
+      if (labelEditData.length === 0) {
+        return alert("ไม่พบข้อมูลยาที่เลือกในคลัง กรุณาลองใหม่อีกครั้ง");
+      }
+
+      renderMedLabelEditForm();
+      medLabelEditModalObj.show();
+    }
+
+    // สร้างฟอร์มแก้ไขข้อมูลฉลากยา (แบบ accordion ทีละรายการ) ใน modal
+    function renderMedLabelEditForm() {
+      const container = document.getElementById("medLabelEditAccordion");
+      container.innerHTML = labelEditData.map((d, idx) => `
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button ${idx === 0 ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#labelEditCollapse${idx}">
+              🏷️ ${escapeHtml(d.trade_name)}${d.generic_name ? ` (${escapeHtml(d.generic_name)})` : ''}
+            </button>
+          </h2>
+          <div id="labelEditCollapse${idx}" class="accordion-collapse collapse ${idx === 0 ? 'show' : ''}" data-bs-parent="#medLabelEditAccordion">
+            <div class="accordion-body">
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label class="form-label small mb-1">ชื่อร้าน</label>
+                  <input type="text" class="form-control form-control-sm" value="${escapeHtml(d.pharmacy_name)}" oninput="updateLabelEditField(${idx}, 'pharmacy_name', this.value)">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small mb-1">วันที่จ่ายยา</label>
+                  <input type="text" class="form-control form-control-sm" value="${escapeHtml(d.sale_date)}" oninput="updateLabelEditField(${idx}, 'sale_date', this.value)">
+                </div>
+                <div class="col-12">
+                  <label class="form-label small mb-1">ที่อยู่ร้าน</label>
+                  <input type="text" class="form-control form-control-sm" value="${escapeHtml(d.pharmacy_address)}" oninput="updateLabelEditField(${idx}, 'pharmacy_address', this.value)">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small mb-1">ชื่อผู้ป่วย</label>
+                  <input type="text" class="form-control form-control-sm" value="${escapeHtml(d.patient_name)}" oninput="updateLabelEditField(${idx}, 'patient_name', this.value)">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small mb-1">ผู้จ่ายยา</label>
+                  <input type="text" class="form-control form-control-sm" value="${escapeHtml(d.dispenser)}" oninput="updateLabelEditField(${idx}, 'dispenser', this.value)">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small mb-1">ชื่อการค้า</label>
+                  <input type="text" class="form-control form-control-sm" value="${escapeHtml(d.trade_name)}" oninput="updateLabelEditField(${idx}, 'trade_name', this.value)">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small mb-1">ชื่อสามัญ</label>
+                  <input type="text" class="form-control form-control-sm" value="${escapeHtml(d.generic_name)}" oninput="updateLabelEditField(${idx}, 'generic_name', this.value)">
+                </div>
+                <div class="col-12">
+                  <label class="form-label small mb-1">ข้อบ่งใช้</label>
+                  <textarea class="form-control form-control-sm" rows="1" oninput="updateLabelEditField(${idx}, 'indication', this.value)">${escapeHtml(d.indication)}</textarea>
+                </div>
+                <div class="col-12">
+                  <label class="form-label small mb-1">วิธีใช้</label>
+                  <textarea class="form-control form-control-sm" rows="1" oninput="updateLabelEditField(${idx}, 'usage', this.value)">${escapeHtml(d.usage)}</textarea>
+                </div>
+                <div class="col-12">
+                  <label class="form-label small mb-1">คำเตือน</label>
+                  <textarea class="form-control form-control-sm" rows="1" oninput="updateLabelEditField(${idx}, 'warning', this.value)">${escapeHtml(d.warning)}</textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function updateLabelEditField(idx, field, value) {
+      if (labelEditData[idx]) labelEditData[idx][field] = value;
+    }
+
+    // ขั้นที่ 2: ผู้ใช้กด "พิมพ์ฉลากยา" ใน modal แล้วค่อยสร้างฉลากจริงและสั่งพิมพ์
+    function confirmPrintMedLabels() {
+      if (!labelEditData || labelEditData.length === 0) return;
+
       const container = document.getElementById("printableMedLabels");
       container.innerHTML = "";
 
-      const patientNameRaw = (currentFoundPatient && currentFoundPatient.full_name)
-        || document.getElementById("posPatientName").value.trim();
-      const patientName = patientNameRaw || "ลูกค้า";
-
-      const saleDate = new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
-      const dispenser = pharmacistName || currentUser || "-";
-
-      let printedCount = 0;
-      selectedLabelMedIds.forEach(medId => {
-        const med = currentMeds.find(m => m.id === medId);
-        if (!med) return;
-        printedCount++;
-
+      labelEditData.forEach(d => {
         const label = document.createElement("div");
         label.className = "medLabelPage";
         label.innerHTML = `
           <div class="medLabelHeader">
-            <div class="medLabelPharmacyName">${escapeHtml(pharmacyName)}</div>
-            ${pharmacyAddress ? `<div class="medLabelPharmacyAddress">${escapeHtml(pharmacyAddress)}</div>` : ''}
+            <div class="medLabelPharmacyName">${escapeHtml(d.pharmacy_name)}</div>
+            ${d.pharmacy_address ? `<div class="medLabelPharmacyAddress">${escapeHtml(d.pharmacy_address)}</div>` : ''}
           </div>
-          <div class="medLabelDate">วันที่จ่ายยา: ${saleDate}</div>
-          <div class="medLabelPatient">ผู้ป่วย: ${escapeHtml(patientName)}</div>
+          <div class="medLabelDate">วันที่จ่ายยา: ${escapeHtml(d.sale_date)}</div>
+          <div class="medLabelPatient">ผู้ป่วย: ${escapeHtml(d.patient_name)}</div>
           <div class="medLabelMedName">
-            <strong>${escapeHtml(med.trade_name)}</strong>${med.generic_name ? ` (${escapeHtml(med.generic_name)})` : ''}
+            <strong>${escapeHtml(d.trade_name)}</strong>${d.generic_name ? ` (${escapeHtml(d.generic_name)})` : ''}
           </div>
-          ${med.label_indication ? `<div class="medLabelLine">ข้อบ่งใช้: ${escapeHtml(med.label_indication)}</div>` : ''}
-          ${med.label_usage ? `<div class="medLabelLine"><strong>วิธีใช้: ${escapeHtml(med.label_usage)}</strong></div>` : ''}
-          ${med.label_warning ? `<div class="medLabelWarning">⚠️ คำเตือน: ${escapeHtml(med.label_warning)}</div>` : ''}
-          <div class="medLabelFooter">ผู้จ่ายยา: ${escapeHtml(dispenser)}</div>
+          ${d.indication ? `<div class="medLabelLine">ข้อบ่งใช้: ${escapeHtml(d.indication)}</div>` : ''}
+          ${d.usage ? `<div class="medLabelLine"><strong>วิธีใช้: ${escapeHtml(d.usage)}</strong></div>` : ''}
+          ${d.warning ? `<div class="medLabelWarning">⚠️ คำเตือน: ${escapeHtml(d.warning)}</div>` : ''}
+          <div class="medLabelFooter">ผู้จ่ายยา: ${escapeHtml(d.dispenser)}</div>
         `;
         container.appendChild(label);
       });
 
-      if (printedCount === 0) {
-        return alert("ไม่พบข้อมูลยาที่เลือกในคลัง กรุณาลองใหม่อีกครั้ง");
-      }
-
+      medLabelEditModalObj.hide();
       document.body.classList.add('printing-med-labels');
       window.print();
     }
