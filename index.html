@@ -1285,12 +1285,12 @@
         label.className = "medLabelPage";
         label.innerHTML = `
           <div class="medLabelHeader" style="color: #000000 !important; font-weight: bold !important; background-color: #ffffff !important;">
-            <div class="medLabelPharmacyName">${escapeHtml(d.pharmacy_name)}</div>
-            ${d.pharmacy_address ? `<div class="medLabelPharmacyAddress">${escapeHtml(d.pharmacy_address)}</div>` : ''}
+            <div class="medLabelPharmacyName" style="color: #000000 !important; font-weight: bold !important; font-size: 11px;">${escapeHtml(d.pharmacy_name)}</div>
+            ${d.pharmacy_address ? `<div class="medLabelPharmacyAddress" style="color: #000000 !important;">${escapeHtml(d.pharmacy_address)}</div>` : ''}
           </div>
-          <div class="medLabelDate">วันที่จ่ายยา: ${escapeHtml(d.sale_date)}</div>
-          <div class="medLabelPatient">ผู้ป่วย: ${escapeHtml(d.patient_name)}</div>
-          <div class="medLabelMedName">
+          <div class="medLabelDate" style="color: #000000 !important;">วันที่จ่ายยา: ${escapeHtml(d.sale_date)}</div>
+          <div class="medLabelPatient" style="color: #000000 !important;">ผู้ป่วย: ${escapeHtml(d.patient_name)}</div>
+          <div class="medLabelMedName" style="color: #000000 !important;">
             <strong>${escapeHtml(d.trade_name)}</strong>${d.generic_name ? ` (${escapeHtml(d.generic_name)})` : ''}
           </div>
           ${d.indication ? `<div class="medLabelLine">ข้อบ่งใช้: ${escapeHtml(d.indication)}</div>` : ''}
