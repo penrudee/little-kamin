@@ -1299,8 +1299,8 @@
           <div class="medLabelMedName" style="color: #000000 !important;">
             <strong>${escapeHtml(d.trade_name)}</strong>${d.generic_name ? ` (${escapeHtml(d.generic_name)})` : ''}
           </div>
-          ${d.indication ? `<div class="medLabelLine">ข้อบ่งใช้: ${escapeHtml(d.indication)}</div>` : ''}
-          ${d.usage ? `<div class="medLabelLine"><strong>วิธีใช้: ${escapeHtml(d.usage)}</strong></div>` : ''}
+          ${d.indication ? `<div class="medLabelLine" style="font-size: 14px;">ข้อบ่งใช้: ${escapeHtml(d.indication)}</div>` : ''}
+          ${d.usage ? `<div class="medLabelLine" style="font-size: 14px;"><strong>วิธีใช้: ${escapeHtml(d.usage)}</strong></div>` : ''}
           ${d.warning ? `<div class="medLabelWarning">⚠️ คำเตือน: ${escapeHtml(d.warning)}</div>` : ''}
           <div class="medLabelFooter">ผู้จ่ายยา: ${escapeHtml(d.dispenser)}</div>
         `;
