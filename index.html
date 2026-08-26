@@ -1284,7 +1284,7 @@
         const label = document.createElement("div");
         label.className = "medLabelPage";
         label.innerHTML = `
-          <div class="medLabelHeader">
+          <div class="medLabelHeader" style="color: #000000 !important; font-weight: bold !important; background-color: #ffffff !important;">
             <div class="medLabelPharmacyName">${escapeHtml(d.pharmacy_name)}</div>
             ${d.pharmacy_address ? `<div class="medLabelPharmacyAddress">${escapeHtml(d.pharmacy_address)}</div>` : ''}
           </div>
