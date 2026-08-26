@@ -12,14 +12,24 @@
     <a href="index.html" class="btn btn-secondary mb-3">&larr;F1 "กลับหน้าหลัก"</a>
     <div class="card shadow-sm mb-3">
       <div class="card-body">
-        <h5>ตั้งค่าชื่อร้านยา</h5>
+        <h5>ตั้งค่าข้อมูลร้านยา</h5>
         <form id="pharmacyNameForm">
           <div class="mb-3">
             <label class="form-label">ชื่อร้านยา</label>
             <input type="text" id="pharmacyName" class="form-control" placeholder="เช่น ร้านยาลิตเติ้ลกามิน" required>
-            <div class="form-text">ชื่อนี้จะแสดงที่แถบเมนูด้านบนและบนบัตรประจำตัวคนไข้ที่พิมพ์ออกมา</div>
+            <div class="form-text">ชื่อนี้จะแสดงที่แถบเมนูด้านบนและบนบัตรประจำตัวคนไข้/ฉลากยาที่พิมพ์ออกมา</div>
           </div>
-          <button type="submit" class="btn btn-primary w-100">บันทึกชื่อร้านยา</button>
+          <div class="mb-3">
+            <label class="form-label">ที่อยู่ร้าน</label>
+            <textarea id="pharmacyAddress" class="form-control" rows="2" placeholder="เช่น 123 ถ.สุขุมวิท ต.หาดใหญ่ อ.หาดใหญ่ จ.สงขลา 90110"></textarea>
+            <div class="form-text">ที่อยู่นี้จะแสดงบนฉลากยาที่พิมพ์ออกมา</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">ชื่อเภสัชกร (ผู้จ่ายยา)</label>
+            <input type="text" id="pharmacistName" class="form-control" placeholder="เช่น ภก. สมชาย ใจดี">
+            <div class="form-text">ชื่อนี้จะแสดงในช่อง "ผู้จ่ายยา" บนฉลากยาที่พิมพ์ออกมา</div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">บันทึกข้อมูลร้านยา</button>
         </form>
       </div>
     </div>
@@ -76,16 +86,24 @@
       await dbEngine.init();
       const settings = await dbEngine.getAll("settings");
       const pharmacyNameSetting = settings.find(s => s.key === "pharmacy_name");
+      const pharmacyAddressSetting = settings.find(s => s.key === "pharmacy_address");
+      const pharmacistNameSetting = settings.find(s => s.key === "pharmacist_name");
       document.getElementById("pharmacyName").value = pharmacyNameSetting ? pharmacyNameSetting.value : "";
+      document.getElementById("pharmacyAddress").value = pharmacyAddressSetting ? pharmacyAddressSetting.value : "";
+      document.getElementById("pharmacistName").value = pharmacistNameSetting ? pharmacistNameSetting.value : "";
     })();
 
     document.getElementById("pharmacyNameForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const name = document.getElementById("pharmacyName").value.trim();
       if (!name) return;
+      const address = document.getElementById("pharmacyAddress").value.trim();
+      const pharmacist = document.getElementById("pharmacistName").value.trim();
       await dbEngine.init();
       await dbEngine.update("settings", { key: "pharmacy_name", value: name });
-      alert("บันทึกชื่อร้านยาเรียบร้อยแล้ว");
+      await dbEngine.update("settings", { key: "pharmacy_address", value: address });
+      await dbEngine.update("settings", { key: "pharmacist_name", value: pharmacist });
+      alert("บันทึกข้อมูลร้านยาเรียบร้อยแล้ว");
     });
 
     document.getElementById("changePasswordForm").addEventListener("submit", async (e) => {

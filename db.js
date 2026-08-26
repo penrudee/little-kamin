@@ -10,7 +10,9 @@ class PharmacyDB {
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains("settings")) {
-          // ค่าตั้งค่าระบบ เช่น ชื่อร้านยา (key/value store)
+          // ค่าตั้งค่าระบบ (key/value store)
+          // key ที่ใช้อยู่: "pharmacy_name" (ชื่อร้านยา), "pharmacy_address" (ที่อยู่ร้าน, ใช้พิมพ์บนฉลากยา),
+          // "pharmacist_name" (ชื่อเภสัชกร/ผู้จ่ายยา, ใช้พิมพ์บนฉลากยา)
           db.createObjectStore("settings", { keyPath: "key" });
         }
         if (!db.objectStoreNames.contains("users")) {
@@ -19,6 +21,8 @@ class PharmacyDB {
           userStore.add({ username: "admin", password: "admin" });
         }
         if (!db.objectStoreNames.contains("medicine")) {
+          // ฟิลด์ข้อมูลฉลากยา (ใช้ตอนพิมพ์ฉลากยา 80x50mm) ที่เก็บในแต่ละ record ของยา:
+          // label_indication (ข้อบ่งใช้), label_usage (วิธีใช้), label_warning (คำเตือน)
           const medStore = db.createObjectStore("medicine", { keyPath: "id", autoIncrement: true });
           medStore.createIndex("trade_name", "trade_name", { unique: false });
         }
