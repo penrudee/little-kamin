@@ -9,10 +9,12 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
 
   <style>
   #printablePatientCard,
-  #printableMedLabels {
+  #printableMedLabels,
+  #printablePriceLabels {
     display: none;
   }
 
@@ -92,12 +94,75 @@
     padding-top: 1mm;
   }
 
+  /* --- สไตล์ของป้ายราคาสินค้า (ขนาด 50x30mm : กว้าง 50mm x สูง 30mm) ---
+     หากเครื่องพิมพ์ของร้านป้อนม้วนป้ายกลับด้าน (30mm x 50mm แนวตั้ง)
+     ให้แก้ค่า --price-label-w / --price-label-h ด้านล่าง แล้วสลับค่า @page ที่ท้ายไฟล์ (ในสคริปต์ confirmPrintPriceLabels) ให้ตรงกัน */
+  :root {
+    --price-label-w: 50mm;
+    --price-label-h: 30mm;
+  }
+
+  .priceLabelPage {
+    width: var(--price-label-w);
+    height: var(--price-label-h);
+    box-sizing: border-box;
+    padding: 1.5mm 2mm;
+    border: 1px solid #000;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+    background: #fff;
+    color: #000000;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .priceLabelName {
+    font-size: 9px;
+    font-weight: bold;
+    color: #000000;
+    line-height: 1.15;
+    max-height: 22px;
+    overflow: hidden;
+  }
+
+  .priceLabelPriceRow {
+    font-size: 15px;
+    font-weight: 900;
+    color: #000000;
+    text-align: right;
+    margin: 0.5mm 0;
+  }
+
+  .priceLabelBarcodeWrap {
+    text-align: center;
+    line-height: 0;
+  }
+
+  .priceLabelBarcodeWrap svg {
+    width: 100%;
+    height: 9mm;
+  }
+
+  .priceLabelDates {
+    display: flex;
+    justify-content: space-between;
+    font-size: 6px;
+    color: #000000;
+    font-weight: bold;
+    border-top: 1px solid #000000;
+    padding-top: 0.5mm;
+    margin-top: 0.5mm;
+  }
+
   /* --- ตั้งค่าสำหรับการพิมพ์ (Print Styles) --- */
   @media print {
     body.printing-patient-card>nav,
     body.printing-patient-card>.container-fluid,
     body.printing-med-labels>nav,
-    body.printing-med-labels>.container-fluid {
+    body.printing-med-labels>.container-fluid,
+    body.printing-price-labels>nav,
+    body.printing-price-labels>.container-fluid {
       display: none !important;
     }
 
@@ -119,6 +184,16 @@
     #printableMedLabels * {
       color: #000000 !important;
       font-weight: bold !important;
+      border-color: #000000 !important;
+      text-shadow: none !important;
+      -webkit-font-smoothing: none !important;
+      -moz-osx-font-smoothing: grayscale !important;
+    }
+
+    /* บังคับข้อความ (ไม่รวม SVG บาร์โค้ด ซึ่งกำหนดสีดำสนิทไว้ตรงๆ ตอนสร้างบาร์โค้ดอยู่แล้ว) ในป้ายราคาสินค้าให้เป็นสีดำสนิท */
+    #printablePriceLabels,
+    #printablePriceLabels *:not(svg) {
+      color: #000000 !important;
       border-color: #000000 !important;
       text-shadow: none !important;
       -webkit-font-smoothing: none !important;
@@ -148,6 +223,11 @@
       margin: 0;
     }
 
+    body.printing-price-labels #printablePriceLabels {
+      display: block !important;
+      margin: 0;
+    }
+
     .medLabelPage {
       margin: 0;
       page-break-after: always;
@@ -160,10 +240,24 @@
       break-after: auto;
     }
 
+    .priceLabelPage {
+      margin: 0;
+      page-break-after: always;
+      break-after: page;
+      page-break-inside: avoid;
+    }
+
+    .priceLabelPage:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
     @page {
       size: 80mm 50mm;
       margin: 0;
     }
+
+    /* ขนาดหน้ากระดาษเฉพาะตอนพิมพ์ป้ายราคาสินค้า (50x30mm) จะ override ค่า @page ด้านบนผ่าน <style id="priceLabelPageSize"> ที่แทรกแบบไดนามิกก่อนสั่งพิมพ์ */
   }
 </style>
 </head>
@@ -385,9 +479,17 @@
             <button type="submit" class="btn btn-primary w-100">+ เพิ่มรายการยาเข้าคลัง</button>
           </form>
 
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input" id="selectAllPriceLabelChk" onchange="toggleSelectAllPriceLabels(this.checked)">
+              <label class="form-check-label small" for="selectAllPriceLabelChk">เลือกทั้งหมด (สำหรับพิมพ์ป้ายราคา)</label>
+            </div>
+            <button class="btn btn-outline-dark btn-sm" onclick="openPriceLabelEditModal()">🏷️ พิมพ์ป้ายราคาสินค้าที่เลือก (F9)</button>
+          </div>
           <table class="table table-striped align-middle">
             <thead>
               <tr>
+                <th class="text-center">🏷️</th>
                 <th>ID</th>
                 <th>Trade Name</th>
                 <th>Generic Name</th>
@@ -593,6 +695,27 @@
     </div>
   </div>
 
+  <!-- Modal สำหรับตรวจสอบ/แก้ไขป้ายราคาสินค้าก่อนพิมพ์ -->
+  <div class="modal fade" id="priceLabelEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header bg-dark text-white">
+          <h5 class="modal-title">🏷️ ตรวจสอบ/แก้ไขป้ายราคาสินค้าก่อนพิมพ์</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-secondary small mb-3">ตรวจสอบชื่อ ราคา วันหมดอายุ และจำนวนป้ายของแต่ละรายการ
+            (ป้ายขนาด 50x30mm ต่อ 1 ใบ, วันที่พิมพ์จะใส่ให้อัตโนมัติ)</div>
+          <div class="accordion" id="priceLabelEditAccordion"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="button" class="btn btn-primary" onclick="confirmPrintPriceLabels()">🖨️ พิมพ์ป้ายราคาสินค้า</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- บัตรสั่งพิมพ์ -->
   <div id="printablePatientCard">
     <div
@@ -613,6 +736,9 @@
   <!-- ฉลากยาสั่งพิมพ์ (80x50mm ต่อรายการ) -->
   <div id="printableMedLabels"></div>
 
+  <!-- ป้ายราคาสินค้าสั่งพิมพ์ (50x30mm ต่อ 1 ป้าย) -->
+  <div id="printablePriceLabels"></div>
+
   <script src="db.js"></script>
   <script src="webrtc.js"></script>
   <script>
@@ -621,10 +747,13 @@
     let currentArticles = [];
     let selectedArticleIds = [];
     let selectedLabelMedIds = [];
+    let selectedPriceLabelMedIds = [];
     let currentFoundPatient = null;
     let editModalObj = null;
     let medLabelEditModalObj = null;
+    let priceLabelEditModalObj = null;
     let labelEditData = [];
+    let priceLabelEditData = [];
     let pharmacyName = "LittleKaminPOS";
     let pharmacyAddress = "";
     let pharmacistName = "";
@@ -639,6 +768,7 @@
       await loadPharmacyName();
       editModalObj = new bootstrap.Modal(document.getElementById('editMedModal'));
       medLabelEditModalObj = new bootstrap.Modal(document.getElementById('medLabelEditModal'));
+      priceLabelEditModalObj = new bootstrap.Modal(document.getElementById('priceLabelEditModal'));
       const medNameInput = document.getElementById("posMedName");
       // F12 check out
       window.addEventListener('keydown', function (event) {
@@ -661,10 +791,20 @@
           openMedLabelEditModal();
         }
       });
+      // F9 เปิดหน้าต่างตรวจสอบ/แก้ไขป้ายราคาสินค้าก่อนพิมพ์
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'F9') {
+          event.preventDefault();
+          openPriceLabelEditModal();
+        }
+      });
       // เคลียร์คลาสสำหรับการพิมพ์หลังพิมพ์เสร็จ/ยกเลิก
       window.addEventListener('afterprint', function () {
         document.body.classList.remove('printing-patient-card');
         document.body.classList.remove('printing-med-labels');
+        document.body.classList.remove('printing-price-labels');
+        const dynPageStyle = document.getElementById('priceLabelPageSize');
+        if (dynPageStyle) dynPageStyle.remove();
       });
       // F6 focus on patient input
       const patientNameInput = document.getElementById("posPatientName");
@@ -814,8 +954,12 @@
           doseDisplay = `${m.dose || '-'} ${unit} (${m.frequency || '-'})`;
         }
 
+        const isPriceLabelChecked = selectedPriceLabelMedIds.includes(m.id);
         stockTable.innerHTML += `
           <tr>
+            <td class="text-center">
+              <input type="checkbox" class="form-check-input" ${isPriceLabelChecked ? 'checked' : ''} title="เลือกเพื่อพิมพ์ป้ายราคา" onchange="togglePriceLabelSelect(${m.id}, this.checked)">
+            </td>
             <td>${m.id}</td>
             <td><strong>${m.trade_name}</strong></td>
             <td>${m.generic_name}</td>
@@ -1072,6 +1216,7 @@
       if (confirm(`คุณต้องการลบรายการยา "${tradeName}" ออกจากคลังใช่หรือไม่?`)) {
         await dbEngine.delete("medicine", id);
         syncEngine.broadcastData({type: "DELETE_DB", store: "medicine", id: id});
+        selectedPriceLabelMedIds = selectedPriceLabelMedIds.filter(x => x !== id);
         await refreshData();
         alert("ลบรายการยาสำเร็จ!");
       }
@@ -1309,6 +1454,166 @@
 
       medLabelEditModalObj.hide();
       document.body.classList.add('printing-med-labels');
+      window.print();
+    }
+
+    // ---------- พิมพ์ป้ายราคาสินค้า (Price Tag Printing, 50x30mm ต่อป้าย) ----------
+    function togglePriceLabelSelect(medId, checked) {
+      if (checked) {
+        if (!selectedPriceLabelMedIds.includes(medId)) selectedPriceLabelMedIds.push(medId);
+      } else {
+        selectedPriceLabelMedIds = selectedPriceLabelMedIds.filter(x => x !== medId);
+      }
+    }
+
+    function toggleSelectAllPriceLabels(checked) {
+      selectedPriceLabelMedIds = checked ? currentMeds.map(m => m.id) : [];
+      refreshData();
+    }
+
+    // ขั้นที่ 1: เปิด modal ให้ตรวจสอบ/แก้ไขข้อมูลป้ายราคาก่อนพิมพ์จริง (ดึงชื่อ/ราคาจากคลังสินค้าที่เลือกไว้)
+    function openPriceLabelEditModal() {
+      if (selectedPriceLabelMedIds.length === 0) {
+        return alert("กรุณาติ๊กเลือกสินค้าในคลัง (ช่อง 🏷️ ในตารางคลังสินค้า) ที่ต้องการพิมพ์ป้ายราคาก่อน");
+      }
+
+      const todayDefault = new Date().toLocaleDateString("th-TH", {year: "numeric", month: "2-digit", day: "2-digit"});
+
+      priceLabelEditData = selectedPriceLabelMedIds
+        .map(medId => currentMeds.find(m => m.id === medId))
+        .filter(Boolean)
+        .map(med => ({
+          medId: med.id,
+          name: med.trade_name,
+          price: med.price,
+          // รหัสบาร์โค้ดเริ่มต้น อ้างอิงจาก ID สินค้าในคลัง (แก้ไขเป็นบาร์โค้ดจริงของสินค้าได้หากมี)
+          barcode: "LK" + String(med.id).padStart(6, "0"),
+          print_date: todayDefault,
+          expiry_date: "",
+          qty: 1
+        }));
+
+      if (priceLabelEditData.length === 0) {
+        return alert("ไม่พบข้อมูลสินค้าที่เลือกในคลัง กรุณาลองใหม่อีกครั้ง");
+      }
+
+      renderPriceLabelEditForm();
+      priceLabelEditModalObj.show();
+    }
+
+    // สร้างฟอร์มแก้ไขข้อมูลป้ายราคา (แบบ accordion ทีละรายการ) ใน modal
+    function renderPriceLabelEditForm() {
+      const container = document.getElementById("priceLabelEditAccordion");
+      container.innerHTML = priceLabelEditData.map((d, idx) => `
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button ${idx === 0 ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#priceLabelEditCollapse${idx}">
+              🏷️ ${escapeHtml(d.name)} — ${d.price} บาท × ${d.qty} ป้าย
+            </button>
+          </h2>
+          <div id="priceLabelEditCollapse${idx}" class="accordion-collapse collapse ${idx === 0 ? 'show' : ''}" data-bs-parent="#priceLabelEditAccordion">
+            <div class="accordion-body">
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label class="form-label small mb-1">ชื่อสินค้า (แสดงบนป้าย)</label>
+                  <input type="text" class="form-control form-control-sm" value="${escapeHtml(d.name)}" oninput="updatePriceLabelEditField(${idx}, 'name', this.value)">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small mb-1">ราคา (บาท)</label>
+                  <input type="number" step="0.01" class="form-control form-control-sm" value="${escapeHtml(String(d.price))}" oninput="updatePriceLabelEditField(${idx}, 'price', this.value)">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small mb-1">จำนวนป้าย (ชุด)</label>
+                  <input type="number" min="1" step="1" class="form-control form-control-sm" value="${d.qty}" oninput="updatePriceLabelEditField(${idx}, 'qty', this.value)">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small mb-1">รหัสบาร์โค้ด</label>
+                  <input type="text" class="form-control form-control-sm" value="${escapeHtml(d.barcode)}" oninput="updatePriceLabelEditField(${idx}, 'barcode', this.value)">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small mb-1">วันที่พิมพ์ป้าย</label>
+                  <input type="text" class="form-control form-control-sm" value="${escapeHtml(d.print_date)}" oninput="updatePriceLabelEditField(${idx}, 'print_date', this.value)">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small mb-1">วันหมดอายุ</label>
+                  <input type="text" class="form-control form-control-sm" placeholder="เช่น 31/12/2570" value="${escapeHtml(d.expiry_date)}" oninput="updatePriceLabelEditField(${idx}, 'expiry_date', this.value)">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function updatePriceLabelEditField(idx, field, value) {
+      if (!priceLabelEditData[idx]) return;
+      if (field === 'qty') {
+        priceLabelEditData[idx].qty = Math.max(1, parseInt(value) || 1);
+      } else {
+        priceLabelEditData[idx][field] = value;
+      }
+      renderPriceLabelEditForm();
+    }
+
+    // ขั้นที่ 2: ผู้ใช้กด "พิมพ์ป้ายราคาสินค้า" ใน modal แล้วค่อยสร้างป้ายจริง (พร้อมบาร์โค้ด) และสั่งพิมพ์
+    function confirmPrintPriceLabels() {
+      if (!priceLabelEditData || priceLabelEditData.length === 0) return;
+
+      const container = document.getElementById("printablePriceLabels");
+      container.innerHTML = "";
+
+      // สร้างป้ายซ้ำตามจำนวน "qty" ของแต่ละรายการ แต่ละป้าย = 1 ใบ ขนาด 50x30mm
+      const barcodeJobs = [];
+      priceLabelEditData.forEach(d => {
+        const qty = Math.max(1, parseInt(d.qty) || 1);
+        for (let i = 0; i < qty; i++) {
+          const svgId = `pricelabel-barcode-${d.medId}-${i}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+          const label = document.createElement("div");
+          label.className = "priceLabelPage";
+          label.innerHTML = `
+            <div class="priceLabelName">${escapeHtml(d.name)}</div>
+            <div class="priceLabelPriceRow">${escapeHtml(String(d.price))} บาท</div>
+            <div class="priceLabelBarcodeWrap"><svg id="${svgId}"></svg></div>
+            <div class="priceLabelDates">
+              <span>พิมพ์: ${escapeHtml(d.print_date)}</span>
+              <span>หมดอายุ: ${d.expiry_date ? escapeHtml(d.expiry_date) : '-'}</span>
+            </div>
+          `;
+          container.appendChild(label);
+          barcodeJobs.push({svgId, value: d.barcode || String(d.medId)});
+        }
+      });
+
+      // ต้องแทรก SVG ลง DOM ก่อน แล้วค่อยเรียก JsBarcode วาดบาร์โค้ดทีหลัง (ทำหลัง appendChild ทั้งหมดแล้ว)
+      barcodeJobs.forEach(job => {
+        try {
+          JsBarcode(`#${job.svgId}`, job.value, {
+            format: "CODE128",
+            displayValue: true,
+            fontSize: 9,
+            font: "Arial",
+            textMargin: 0,
+            margin: 0,
+            height: 34,
+            lineColor: "#000000",
+            background: "transparent"
+          });
+        } catch (err) {
+          console.error("สร้างบาร์โค้ดไม่สำเร็จสำหรับ", job.value, err);
+        }
+      });
+
+      // กำหนดขนาดกระดาษสำหรับรอบพิมพ์นี้เป็น 50x30mm แบบไดนามิก (ไม่ไปรบกวน @page ของฉลากยา 80x50mm)
+      let dynPageStyle = document.getElementById('priceLabelPageSize');
+      if (!dynPageStyle) {
+        dynPageStyle = document.createElement('style');
+        dynPageStyle.id = 'priceLabelPageSize';
+        document.head.appendChild(dynPageStyle);
+      }
+      dynPageStyle.innerHTML = '@media print { @page { size: 50mm 30mm; margin: 0; } }';
+
+      priceLabelEditModalObj.hide();
+      document.body.classList.add('printing-price-labels');
       window.print();
     }
 
