@@ -1508,7 +1508,7 @@
         <div class="accordion-item">
           <h2 class="accordion-header">
             <button class="accordion-button ${idx === 0 ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#priceLabelEditCollapse${idx}">
-              🏷️ ${escapeHtml(d.name)} — ${d.price} บาท × ${d.qty} ป้าย
+              🏷️ <span id="priceLabelHeaderText${idx}">${escapeHtml(d.name)} — ${d.price} บาท × ${d.qty} ป้าย</span>
             </button>
           </h2>
           <div id="priceLabelEditCollapse${idx}" class="accordion-collapse collapse ${idx === 0 ? 'show' : ''}" data-bs-parent="#priceLabelEditAccordion">
@@ -1552,7 +1552,11 @@
       } else {
         priceLabelEditData[idx][field] = value;
       }
-      renderPriceLabelEditForm();
+      const headerSpan = document.getElementById(`priceLabelHeaderText${idx}`);
+      if (headerSpan) {
+        const d = priceLabelEditData[idx];
+        headerSpan.textContent = `${d.name} — ${d.price} บาท × ${d.qty} ป้าย`;
+      }
     }
 
     // ขั้นที่ 2: ผู้ใช้กด "พิมพ์ป้ายราคาสินค้า" ใน modal แล้วค่อยสร้างป้ายจริง (พร้อมบาร์โค้ด) และสั่งพิมพ์
