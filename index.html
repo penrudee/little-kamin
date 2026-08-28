@@ -272,6 +272,7 @@
         <button class="nav-link btn btn-link" onclick="switchTab('stockTab')">2. คลังสินค้า(F2)</button>
         <button class="nav-link btn btn-link" onclick="switchTab('patientTab')">3. คนไข้(F3)</button>
         <button class="nav-link btn btn-link" onclick="switchTab('articleTab')">4. บทความ(F4)</button>
+        <button class="nav-link btn btn-link" onclick="switchTab('appointmentTab')">📅 นัดหมาย <span id="apptNavBadge" class="badge bg-danger rounded-pill d-none">0</span></button>
         <a class="nav-link" href="settings.html">5. ตั้งค่า(F5)</a>
       </div>
       <span class="navbar-text text-warning" id="clientCountDisplay">
@@ -330,11 +331,20 @@
           </div>
 
           <!-- Sync Web QR -->
-          <div class="card">
+          <div class="card mb-3">
             <div class="card-header bg-secondary text-white">ซิงค์ฐานข้อมูล (P2P Smartphone)</div>
             <div class="card-body text-center">
               <div id="qrcode" class="d-flex justify-content-center mb-2"></div>
               <small class="text-muted">สแกนเพื่อคัดลอกฐานข้อมูลไปยัง Smartphone เครื่องอื่น</small>
+            </div>
+          </div>
+
+          <!-- Booking QR (สำหรับคนไข้ทั่วไป ไม่ต้องมีชื่อในระบบมาก่อน) -->
+          <div class="card">
+            <div class="card-header bg-info text-white">📅 QR ขอนัดหมาย (คนไข้ทั่วไป)</div>
+            <div class="card-body text-center">
+              <div id="bookingQrcode" class="d-flex justify-content-center mb-2"></div>
+              <small class="text-muted">ติดไว้หน้าร้าน คนไข้ที่ยังไม่มีประวัติในระบบสแกนขอนัดได้เลย</small>
             </div>
           </div>
         </div>
@@ -401,6 +411,16 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: นัดหมาย -->
+    <div id="appointmentTab" class="tab-content d-none">
+      <div class="card">
+        <div class="card-header bg-dark text-white">📅 คำขอนัดหมายจากคนไข้</div>
+        <div class="card-body" id="appointmentListBody">
+          <div class="text-muted text-center py-3">ยังไม่มีคำขอนัดหมาย</div>
         </div>
       </div>
     </div>
@@ -806,6 +826,8 @@
     let patientKeyToConnPeer = new Map(); // patientKey -> conn.peer ล่าสุดที่คนไข้คนนี้ต่ออยู่ (transient ใช้หา conn ตอนตอบ)
     let activeChatKey = null;
     const CHAT_STORAGE_KEY = "lk_chat_threads_v1";
+    let appointments = [];
+    const APPT_STORAGE_KEY = "lk_appointments_v1";
     const currentUser = sessionStorage.getItem("loggedInUser") || "";
 
     window.onload = async () => {
@@ -820,6 +842,8 @@
       priceLabelEditModalObj = new bootstrap.Modal(document.getElementById('priceLabelEditModal'));
       chatModalObj = new bootstrap.Modal(document.getElementById('chatModal'));
       loadChatThreadsFromStorage();
+      loadAppointmentsFromStorage();
+      renderAppointmentList();
       setupChatReplyForm();
       const medNameInput = document.getElementById("posMedName");
       // F12 check out
@@ -994,6 +1018,151 @@
     async function unblockPatientUI(patientSpecialId) {
       await syncEngine.unblockPatient(patientSpecialId);
       await refreshData();
+    }
+
+    // ---------- QR ขอนัดหมาย (คนไข้ทั่วไป ไม่ต้องมีชื่อในระบบมาก่อน) ----------
+    function renderBookingQR(peerId) {
+      const container = document.getElementById("bookingQrcode");
+      if (!container) return;
+      container.innerHTML = "";
+      const bookingUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}book_appointment.html?hostId=${peerId}`;
+      new QRCode(container, { text: bookingUrl, width: 128, height: 128 });
+    }
+
+    // ---------- นัดหมาย: persist ผ่าน localStorage ----------
+    function loadAppointmentsFromStorage() {
+      try {
+        const raw = localStorage.getItem(APPT_STORAGE_KEY);
+        appointments = raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        console.error("โหลดนัดหมายไม่สำเร็จ:", e);
+        appointments = [];
+      }
+    }
+
+    function saveAppointmentsToStorage() {
+      try {
+        localStorage.setItem(APPT_STORAGE_KEY, JSON.stringify(appointments));
+      } catch (e) {
+        console.error("บันทึกนัดหมายไม่สำเร็จ:", e);
+      }
+    }
+
+    // เรียกจาก webrtc.js ทันทีที่มีคำขอนัดเข้ามา (data.type === "REQUEST_APPOINTMENT")
+    function handleIncomingAppointment(conn, payload) {
+      appointments.unshift({
+        id: "appt_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+        name: payload.name,
+        phone: payload.phone,
+        note: payload.note || "",
+        preferredTime: payload.preferredTime || null,
+        requestedAt: payload.requestedAt || Date.now(),
+        status: "pending",       // pending | accepted | declined
+        connPeer: conn.peer      // ใช้ตอบกลับถ้ายังเชื่อมต่ออยู่ (อาจหลุดไปแล้วตอนเภสัชกรมาดู)
+      });
+      saveAppointmentsToStorage();
+      renderAppointmentList();
+    }
+
+    function renderAppointmentList() {
+      const box = document.getElementById("appointmentListBody");
+      const pendingCount = appointments.filter(a => a.status === "pending").length;
+
+      const navBadge = document.getElementById("apptNavBadge");
+      if (pendingCount > 0) {
+        navBadge.innerText = pendingCount;
+        navBadge.classList.remove("d-none");
+      } else {
+        navBadge.classList.add("d-none");
+      }
+
+      if (appointments.length === 0) {
+        box.innerHTML = '<div class="text-muted text-center py-3">ยังไม่มีคำขอนัดหมาย</div>';
+        return;
+      }
+
+      const statusBadge = {
+        pending: '<span class="badge bg-warning text-dark">รอดำเนินการ</span>',
+        accepted: '<span class="badge bg-success">รับนัดแล้ว</span>',
+        declined: '<span class="badge bg-secondary">ปฏิเสธแล้ว</span>'
+      };
+
+      box.innerHTML = appointments.map(a => {
+        const isOnline = syncEngine.connections.some(c => c.peer === a.connPeer && c.open);
+        const timeStr = new Date(a.requestedAt).toLocaleString("th-TH");
+        const preferredStr = a.preferredTime ? new Date(a.preferredTime).toLocaleString("th-TH") : "-";
+
+        const actions = a.status === "pending" ? `
+          <button class="btn btn-sm btn-success me-1" onclick="acceptAppointment('${a.id}')">✅ รับนัด</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="declineAppointment('${a.id}')">✕ ปฏิเสธ</button>
+        ` : `<button class="btn btn-sm btn-outline-secondary" onclick="removeAppointment('${a.id}')">ลบออกจากรายการ</button>`;
+
+        return `
+          <div class="card mb-2 border">
+            <div class="card-body py-2">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <strong>${escapeHtml(a.name)}</strong> — ${escapeHtml(a.phone)}
+                  ${isOnline ? '<span class="text-success small ms-1">● ออนไลน์</span>' : '<span class="text-muted small ms-1">○ ออฟไลน์</span>'}
+                  <div class="small text-muted">ขอนัดเมื่อ: ${timeStr}</div>
+                  <div class="small text-muted">เวลาที่สะดวก: ${preferredStr}</div>
+                  ${a.note ? `<div class="small mt-1">📝 ${escapeHtml(a.note)}</div>` : ''}
+                </div>
+                <div class="text-end">
+                  ${statusBadge[a.status] || ''}
+                  <div class="mt-2">${actions}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function acceptAppointment(id) {
+      const appt = appointments.find(a => a.id === id);
+      if (!appt) return;
+
+      appt.status = "accepted";
+      saveAppointmentsToStorage();
+
+      // แจ้งคนไข้ (ถ้ายังออนไลน์อยู่)
+      const conn = syncEngine.connections.find(c => c.peer === appt.connPeer && c.open);
+      if (conn) {
+        conn.send({ type: "APPOINTMENT_ACCEPTED", payload: { note: "กรุณามาตามเวลานัดได้เลยครับ" } });
+      }
+
+      renderAppointmentList();
+
+      // ให้เภสัชกรกรอกประวัติคนไข้ต่อทันที (prefill ชื่อ/เบอร์ที่ได้จากคำขอนัด)
+      if (confirm(`รับนัด "${appt.name}" แล้ว ต้องการไปกรอกประวัติคนไข้เพื่อสร้างรหัสคนไข้เลยหรือไม่?`)) {
+        switchTab('posTab');
+        document.getElementById("posPatientName").value = appt.name;
+        document.getElementById("posPhone").value = appt.phone;
+        document.getElementById("posPatientName").focus();
+      }
+    }
+
+    function declineAppointment(id) {
+      const appt = appointments.find(a => a.id === id);
+      if (!appt) return;
+      if (!confirm(`ต้องการปฏิเสธนัดของ "${appt.name}" ใช่หรือไม่?`)) return;
+
+      appt.status = "declined";
+      saveAppointmentsToStorage();
+
+      const conn = syncEngine.connections.find(c => c.peer === appt.connPeer && c.open);
+      if (conn) {
+        conn.send({ type: "APPOINTMENT_DECLINED" });
+      }
+
+      renderAppointmentList();
+    }
+
+    function removeAppointment(id) {
+      appointments = appointments.filter(a => a.id !== id);
+      saveAppointmentsToStorage();
+      renderAppointmentList();
     }
 
     // เรียกจาก webrtc.js ทันทีที่รู้ว่า conn ไหนคือคนไข้คนไหน (ก่อนที่จะมีการแชทเกิดขึ้นด้วยซ้ำ)

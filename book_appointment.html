@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ขอนัดหมาย - LittleKaminPOS</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body class="bg-light">
+<div class="container my-4" style="max-width: 500px;">
+  <div class="card shadow-sm mb-3">
+    <div class="card-header bg-primary text-white text-center fw-bold fs-5">
+      📅 ขอนัดหมายร้านยา
+    </div>
+    <div class="card-body">
+      <div id="connectionStatus" class="alert alert-warning text-center py-2 mb-3">
+        ⏳ กำลังเชื่อมต่อไปยังร้านยา...
+      </div>
+
+      <!-- ฟอร์มขอนัด -->
+      <form id="bookingForm" class="d-none">
+        <div class="mb-2">
+          <label class="form-label small">ชื่อ-นามสกุล <span class="text-danger">*</span></label>
+          <input type="text" id="bName" class="form-control" required>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">เบอร์โทรศัพท์ <span class="text-danger">*</span></label>
+          <input type="tel" id="bPhone" class="form-control" required>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">อาการ / เรื่องที่ต้องการปรึกษา</label>
+          <textarea id="bNote" class="form-control" rows="3" placeholder="เช่น ไข้ ไอ มา 2 วัน อยากปรึกษาเรื่องยา"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small">เวลาที่สะดวกเข้าร้าน (ไม่บังคับ)</label>
+          <input type="datetime-local" id="bTime" class="form-control">
+        </div>
+        <button type="submit" class="btn btn-primary w-100" id="bSubmitBtn">ส่งคำขอนัดหมาย</button>
+      </form>
+
+      <!-- สถานะหลังส่งคำขอ -->
+      <div id="afterSubmitBox" class="d-none text-center">
+        <div class="alert alert-success">✅ ส่งคำขอนัดหมายเรียบร้อยแล้ว</div>
+        <p class="text-muted small">ร้านยาจะติดต่อกลับผ่านเบอร์โทรที่ให้ไว้ หรือรอการยืนยันที่นี่</p>
+        <div id="ackStatus" class="alert alert-info d-none"></div>
+      </div>
+    </div>
+  </div>
+  <div class="text-center text-muted small">ระบบขอนัดหมายแบบ P2P ไม่ผ่านเซิร์ฟเวอร์กลาง</div>
+</div>
+
+<script>
+let peer = null;
+let conn = null;
+
+window.onload = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const hostId = urlParams.get("hostId");
+
+  if (!hostId) {
+    showError("❌ QR Code ไม่ถูกต้อง หรือไม่พบรหัสร้านยา");
+    return;
+  }
+
+  connectToHostStore(hostId);
+  document.getElementById("bookingForm").addEventListener("submit", submitBooking);
+};
+
+function connectToHostStore(hostId) {
+  peer = new Peer({
+    config: {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" }
+      ]
+    }
+  });
+
+  peer.on("open", () => {
+    conn = peer.connect(hostId, { reliable: true });
+
+    conn.on("open", () => {
+      document.getElementById("connectionStatus").className = "alert alert-success text-center py-2 mb-3";
+      document.getElementById("connectionStatus").innerText = "✅ เชื่อมต่อร้านยาสำเร็จ กรอกข้อมูลเพื่อขอนัดได้เลย";
+      document.getElementById("bookingForm").classList.remove("d-none");
+    });
+
+    conn.on("data", (data) => {
+      if (data.type === "APPOINTMENT_ACK") {
+        showAckStatus("ร้านยาได้รับคำขอนัดของคุณแล้ว", "alert-info");
+      } else if (data.type === "APPOINTMENT_ACCEPTED") {
+        showAckStatus("🎉 ร้านยายืนยันนัดของคุณแล้ว " + (data.payload && data.payload.note ? data.payload.note : ""), "alert-success");
+      } else if (data.type === "APPOINTMENT_DECLINED") {
+        showAckStatus("ร้านยาไม่สามารถรับนัดนี้ได้ กรุณาติดต่อร้านโดยตรง", "alert-warning");
+      } else if (data.type === "BLOCKED") {
+        showError(data.payload && data.payload.reason ? data.payload.reason : "การเชื่อมต่อถูกระงับโดยร้านยา");
+      }
+    });
+
+    conn.on("close", () => console.log("Connection closed"));
+    conn.on("error", () => showError("ไม่สามารถส่งคำขอได้ เครื่องร้านยาอาจปิดอยู่"));
+  });
+
+  peer.on("error", () => showError("การเชื่อมต่อ P2P ขัดข้อง กรุณาลองสแกนใหม่อีกครั้ง"));
+}
+
+function submitBooking(e) {
+  e.preventDefault();
+  if (!conn || !conn.open) {
+    alert("ยังไม่ได้เชื่อมต่อกับร้านยา กรุณารอสักครู่แล้วลองใหม่");
+    return;
+  }
+
+  const payload = {
+    name: document.getElementById("bName").value.trim(),
+    phone: document.getElementById("bPhone").value.trim(),
+    note: document.getElementById("bNote").value.trim(),
+    preferredTime: document.getElementById("bTime").value || null,
+    requestedAt: Date.now()
+  };
+
+  if (!payload.name || !payload.phone) {
+    alert("กรุณากรอกชื่อและเบอร์โทรศัพท์");
+    return;
+  }
+
+  document.getElementById("bSubmitBtn").disabled = true;
+  document.getElementById("bSubmitBtn").innerText = "กำลังส่ง...";
+
+  conn.send({ type: "REQUEST_APPOINTMENT", payload });
+
+  document.getElementById("bookingForm").classList.add("d-none");
+  document.getElementById("afterSubmitBox").classList.remove("d-none");
+}
+
+function showAckStatus(text, cls) {
+  const box = document.getElementById("ackStatus");
+  box.className = "alert text-center " + cls;
+  box.innerText = text;
+  box.classList.remove("d-none");
+}
+
+function showError(msg) {
+  const el = document.getElementById("connectionStatus");
+  el.className = "alert alert-danger text-center py-2 mb-3";
+  el.innerText = "❌ " + msg;
+}
+</script>
+</body>
+</html>

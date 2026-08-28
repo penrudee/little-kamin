@@ -34,6 +34,7 @@ class SyncEngine {
       console.log("My Peer ID:", id);
       if (isHost && !hostIdToConnect) {
         this.renderQRCode(id);
+        if (typeof renderBookingQR === "function") renderBookingQR(id);
       } else if (hostIdToConnect) {
         this.connectToHost(hostIdToConnect);
       }
@@ -87,7 +88,7 @@ class SyncEngine {
 
   async handleIncomingData(conn, data) {
     // ----- กันสแปม: เช็คก่อนทุกอย่างสำหรับ type ที่คนไข้เป็นคนยิงเข้ามา -----
-    const patientTriggeredTypes = ["REQUEST_PATIENT_HISTORY", "CHAT_MESSAGE"];
+    const patientTriggeredTypes = ["REQUEST_PATIENT_HISTORY", "CHAT_MESSAGE", "REQUEST_APPOINTMENT"];
     if (patientTriggeredTypes.includes(data.type)) {
       // จำ patientSpecialId ที่ conn นี้เคยขอ ไว้ใช้ตอนบล็อกย้อนหลัง
       const pid = data.patientSpecialId || (data.payload && data.payload.patientSpecialId);
@@ -132,6 +133,14 @@ class SyncEngine {
       // ส่งต่อให้ UI ของหน้าร้าน (ถ้ามีฟังก์ชันนี้อยู่ในหน้า index.html) แสดงข้อความและให้เภสัชกรตอบ
       if (typeof handleIncomingChat === "function") {
         handleIncomingChat(conn, data.payload);
+      }
+    }
+
+    if (data.type === "REQUEST_APPOINTMENT") {
+      // ตอบรับทันทีว่าได้รับคำขอแล้ว (คนไข้จะเห็น "ร้านได้รับคำขอแล้ว")
+      conn.send({ type: "APPOINTMENT_ACK" });
+      if (typeof handleIncomingAppointment === "function") {
+        handleIncomingAppointment(conn, data.payload);
       }
     }
 
