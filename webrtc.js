@@ -3,9 +3,21 @@ class SyncEngine {
   constructor() {
     this.connections = [];
     this.peer = null;
+
+    // ----- สถานะร้าน (ว่าง/ไม่ว่าง/รอคิว) -----
+    this.currentStatus = null; // { state: 'available'|'busy'|'queue', queueCount, ts }
+
+    // ----- ระบบกันสแปม / บล็อกคนไข้ -----
+    this.blockedPatientIds = new Set();   // patient_special_id ที่ถูกบล็อก
+    this.connToPatientId = new Map();     // conn.peer -> patientSpecialId ล่าสุดที่ conn นี้ขอดู (ใช้ผูกตอนบล็อก)
+    this.messageLog = new Map();          // conn.peer -> array ของ timestamp คำขอ ใช้เช็ค rate limit
+    this.RATE_LIMIT_COUNT = 8;            // อนุญาตสูงสุดกี่คำขอ
+    this.RATE_LIMIT_WINDOW_MS = 10000;    // ต่อกี่ ms (10 วิ)
   }
 
-  initPeer(isHost = true, hostIdToConnect = null) {
+  async initPeer(isHost = true, hostIdToConnect = null) {
+    await this.loadBlockedList();
+
     this.peer = new Peer({
       config: {
         iceServers: [
@@ -43,6 +55,11 @@ class SyncEngine {
       }
       this.updateClientCounter();
 
+      // ส่งสถานะร้านปัจจุบันให้ผู้ที่เพิ่งเชื่อมต่อเข้ามาทันที (เช่น คนไข้เพิ่งสแกน QR)
+      if (this.currentStatus) {
+        conn.send({ type: "STATUS_UPDATE", payload: this.currentStatus });
+      }
+
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get("syncId")) {
         conn.send({ type: "REQUEST_FULL_SYNC" });
@@ -69,6 +86,28 @@ class SyncEngine {
   }
 
   async handleIncomingData(conn, data) {
+    // ----- กันสแปม: เช็คก่อนทุกอย่างสำหรับ type ที่คนไข้เป็นคนยิงเข้ามา -----
+    const patientTriggeredTypes = ["REQUEST_PATIENT_HISTORY", "CHAT_MESSAGE"];
+    if (patientTriggeredTypes.includes(data.type)) {
+      // จำ patientSpecialId ที่ conn นี้เคยขอ ไว้ใช้ตอนบล็อกย้อนหลัง
+      const pid = data.patientSpecialId || (data.payload && data.payload.patientSpecialId);
+      if (pid) this.connToPatientId.set(conn.peer, pid);
+
+      const knownPid = this.connToPatientId.get(conn.peer);
+      if (knownPid && this.blockedPatientIds.has(knownPid)) {
+        conn.send({ type: "BLOCKED", payload: { reason: "คุณถูกระงับการใช้งานชั่วคราวโดยร้านยา" } });
+        return;
+      }
+
+      if (this.isRateLimited(conn)) {
+        console.warn("Rate limit exceeded, auto-blocking:", conn.peer, knownPid);
+        if (knownPid) await this.blockPatient(knownPid);
+        conn.send({ type: "BLOCKED", payload: { reason: "ตรวจพบการส่งคำขอถี่ผิดปกติ ระบบระงับการใช้งานอัตโนมัติ" } });
+        conn.close();
+        return;
+      }
+    }
+
     if (data.type === "REQUEST_FULL_SYNC") {
       const meds = await dbEngine.getAll("medicine");
       const patients = await dbEngine.getAll("patient");
@@ -82,6 +121,13 @@ class SyncEngine {
       const targetPatient = patients.find((p) => p.patient_special_id === data.patientSpecialId);
       const targetBills = bills.filter((b) => b.patientSpecialId === data.patientSpecialId || (targetPatient && b.patientName === targetPatient.full_name));
       conn.send({ type: "RESPONSE_PATIENT_HISTORY", payload: { patient: targetPatient, bills: targetBills } });
+    }
+
+    if (data.type === "CHAT_MESSAGE") {
+      // ส่งต่อให้ UI ของหน้าร้าน (ถ้ามีฟังก์ชันนี้อยู่ในหน้า index.html) แสดงข้อความและให้เภสัชกรตอบ
+      if (typeof handleIncomingChat === "function") {
+        handleIncomingChat(conn, data.payload);
+      }
     }
 
     if (data.type === "RESPONSE_FULL_SYNC") {
@@ -105,6 +151,66 @@ class SyncEngine {
         if (typeof refreshData === "function") await refreshData();
       }
     }
+  }
+
+  // ----- Rate limiting -----
+  isRateLimited(conn) {
+    const now = Date.now();
+    const key = conn.peer;
+    const timestamps = (this.messageLog.get(key) || []).filter(
+      (t) => now - t < this.RATE_LIMIT_WINDOW_MS
+    );
+    timestamps.push(now);
+    this.messageLog.set(key, timestamps);
+    return timestamps.length > this.RATE_LIMIT_COUNT;
+  }
+
+  // ----- สถานะร้าน (ว่าง/ไม่ว่าง/รอคิว) -----
+  setStatus(state, queueCount = 0) {
+    this.currentStatus = { state, queueCount, ts: Date.now() };
+    this.broadcastData({ type: "STATUS_UPDATE", payload: this.currentStatus });
+    return this.currentStatus;
+  }
+
+  // ----- บล็อกคนไข้ (persist ผ่าน dbEngine settings) -----
+  async loadBlockedList() {
+    try {
+      const settings = await dbEngine.getAll("settings");
+      const rec = settings.find((s) => s.key === "blocked_patient_ids");
+      const ids = rec && rec.value ? JSON.parse(rec.value) : [];
+      this.blockedPatientIds = new Set(ids);
+    } catch (e) {
+      console.error("โหลด blocked list ไม่สำเร็จ:", e);
+      this.blockedPatientIds = new Set();
+    }
+  }
+
+  async saveBlockedList() {
+    await dbEngine.update("settings", {
+      key: "blocked_patient_ids",
+      value: JSON.stringify(Array.from(this.blockedPatientIds))
+    });
+  }
+
+  async blockPatient(patientSpecialId) {
+    this.blockedPatientIds.add(patientSpecialId);
+    await this.saveBlockedList();
+
+    // ตัดการเชื่อมต่อของคนไข้รายนี้ถ้ากำลังเปิดอยู่
+    for (const [peerId, pid] of this.connToPatientId.entries()) {
+      if (pid === patientSpecialId) {
+        const conn = this.connections.find((c) => c.peer === peerId);
+        if (conn && conn.open) {
+          conn.send({ type: "BLOCKED", payload: { reason: "คุณถูกระงับการใช้งานโดยร้านยา" } });
+          conn.close();
+        }
+      }
+    }
+  }
+
+  async unblockPatient(patientSpecialId) {
+    this.blockedPatientIds.delete(patientSpecialId);
+    await this.saveBlockedList();
   }
 
   renderQRCode(peerId) {
