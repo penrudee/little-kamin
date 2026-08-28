@@ -746,6 +746,42 @@
   <!-- ป้ายราคาสินค้าสั่งพิมพ์ (50x30mm ต่อ 1 ป้าย) -->
   <div id="printablePriceLabels"></div>
 
+  <!-- ===== ปุ่มแชทลอย (มุมขวาล่าง) ===== -->
+  <button id="openChatPanelBtn" class="btn btn-primary rounded-circle shadow"
+    style="position:fixed;bottom:24px;right:24px;width:60px;height:60px;font-size:22px;z-index:1000;"
+    onclick="openChatModal()">
+    💬
+  </button>
+  <span id="chatTotalBadge" class="badge bg-danger rounded-pill d-none"
+    style="position:fixed;bottom:70px;right:20px;z-index:1001;">0</span>
+
+  <!-- ===== Modal แชทกับคนไข้ ===== -->
+  <div class="modal fade" id="chatModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content" style="height:70vh;">
+        <div class="modal-header bg-primary text-white py-2">
+          <h6 class="modal-title mb-0">💬 แชทกับคนไข้</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-0 d-flex" style="min-height:0;">
+          <!-- รายชื่อบทสนทนา -->
+          <div id="chatConvList" class="border-end" style="width:220px;overflow-y:auto;flex-shrink:0;">
+            <div class="text-muted text-center small py-3 px-2">ยังไม่มีคนไข้ทักแชทเข้ามา</div>
+          </div>
+          <!-- กล่องข้อความ -->
+          <div class="d-flex flex-column flex-grow-1" style="min-width:0;">
+            <div id="chatActiveHeader" class="border-bottom py-2 px-3 small text-muted">เลือกบทสนทนาทางซ้าย</div>
+            <div id="chatThreadArea" class="flex-grow-1 p-3" style="overflow-y:auto;background:#f8f9fa;"></div>
+            <form id="chatReplyForm" class="d-flex gap-2 p-2 border-top bg-white">
+              <input type="text" id="chatReplyInput" class="form-control form-control-sm" placeholder="พิมพ์ข้อความตอบกลับ..." autocomplete="off" disabled>
+              <button type="submit" class="btn btn-primary btn-sm" id="chatReplyBtn" disabled>ส่ง</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="db.js"></script>
   <script src="webrtc.js"></script>
   <script>
@@ -764,6 +800,12 @@
     let pharmacyName = "LittleKaminPOS";
     let pharmacyAddress = "";
     let pharmacistName = "";
+    let currentPatients = [];
+    let chatModalObj = null;
+    let chatThreads = new Map();        // patientKey -> { patientName, messages: [{sender, text, ts}], unread }
+    let patientKeyToConnPeer = new Map(); // patientKey -> conn.peer ล่าสุดที่คนไข้คนนี้ต่ออยู่ (transient ใช้หา conn ตอนตอบ)
+    let activeChatKey = null;
+    const CHAT_STORAGE_KEY = "lk_chat_threads_v1";
     const currentUser = sessionStorage.getItem("loggedInUser") || "";
 
     window.onload = async () => {
@@ -776,6 +818,9 @@
       editModalObj = new bootstrap.Modal(document.getElementById('editMedModal'));
       medLabelEditModalObj = new bootstrap.Modal(document.getElementById('medLabelEditModal'));
       priceLabelEditModalObj = new bootstrap.Modal(document.getElementById('priceLabelEditModal'));
+      chatModalObj = new bootstrap.Modal(document.getElementById('chatModal'));
+      loadChatThreadsFromStorage();
+      setupChatReplyForm();
       const medNameInput = document.getElementById("posMedName");
       // F12 check out
       window.addEventListener('keydown', function (event) {
@@ -951,18 +996,201 @@
       await refreshData();
     }
 
+    // เรียกจาก webrtc.js ทันทีที่รู้ว่า conn ไหนคือคนไข้คนไหน (ก่อนที่จะมีการแชทเกิดขึ้นด้วยซ้ำ)
+    function notifyPatientPresence(conn, patientSpecialId) {
+      if (!patientSpecialId) return;
+      patientKeyToConnPeer.set(patientSpecialId, conn.peer);
+      if (document.getElementById("chatModal").classList.contains("show")) {
+        renderChatConvList();
+        if (activeChatKey === patientSpecialId) selectChatConversation(activeChatKey);
+      }
+    }
+
+    // ---------- ประวัติแชท: persist ผ่าน localStorage ----------
+    function loadChatThreadsFromStorage() {
+      try {
+        const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+        if (raw) {
+          const obj = JSON.parse(raw);
+          chatThreads = new Map(Object.entries(obj));
+        }
+      } catch (e) {
+        console.error("โหลดประวัติแชทไม่สำเร็จ:", e);
+        chatThreads = new Map();
+      }
+    }
+
+    function saveChatThreadsToStorage() {
+      try {
+        const obj = Object.fromEntries(chatThreads);
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(obj));
+      } catch (e) {
+        console.error("บันทึกประวัติแชทไม่สำเร็จ:", e);
+      }
+    }
+
+    // หา key ของคนไข้สำหรับ conn ที่กำลังคุยด้วย: ใช้ patientSpecialId ถ้ารู้แล้ว
+    // (ปกติรู้ตั้งแต่ตอนคนไข้เปิดหน้า patient_history.html เพราะมันขอประวัติยาก่อนแชทเสมอ)
+    // ถ้ายังไม่รู้ (edge case) ใช้ conn.peer เป็น key ชั่วคราวไปก่อน
+    function getPatientKeyForConn(connPeer) {
+      const pid = syncEngine.connToPatientId.get(connPeer);
+      return pid || ("conn:" + connPeer);
+    }
+
     // ---------- รับข้อความแชทจากคนไข้ (เรียกจาก webrtc.js: handleIncomingData -> CHAT_MESSAGE) ----------
     function handleIncomingChat(conn, payload) {
-      // TODO: ต่อ UI แชทฝั่งร้านจริง (กล่องข้อความ + ให้เภสัชกรพิมพ์ตอบ)
-      // ตอนนี้ log ไว้ก่อน และตอบรับอัตโนมัติ เพื่อยืนยันว่าข้อความถึงแล้ว
-      console.log("ข้อความจากคนไข้ (" + conn.peer + "):", payload);
+      const key = getPatientKeyForConn(conn.peer);
+      patientKeyToConnPeer.set(key, conn.peer);
 
-      if (conn.open) {
-        conn.send({
-          type: "CHAT_MESSAGE",
-          payload: { sender: "pharmacy", text: "ร้านได้รับข้อความแล้ว จะรีบตอบกลับครับ", ts: Date.now() }
-        });
+      let thread = chatThreads.get(key);
+      if (!thread) {
+        const patient = currentPatients.find(p => p.patient_special_id === key);
+        thread = {
+          patientName: patient ? patient.full_name : (key.startsWith("conn:") ? "คนไข้ไม่ทราบชื่อ" : key),
+          messages: [],
+          unread: 0
+        };
+        chatThreads.set(key, thread);
+      } else if (!thread.patientName || thread.patientName === "คนไข้ไม่ทราบชื่อ") {
+        // อัปเดตชื่อถ้าเพิ่งรู้จักคนไข้ทีหลัง
+        const patient = currentPatients.find(p => p.patient_special_id === key);
+        if (patient) thread.patientName = patient.full_name;
       }
+
+      thread.messages.push({ sender: "patient", text: payload.text, ts: payload.ts || Date.now() });
+
+      const modalOpen = document.getElementById("chatModal").classList.contains("show");
+      if (activeChatKey === key && modalOpen) {
+        renderChatThread(key);
+      } else {
+        thread.unread++;
+      }
+
+      saveChatThreadsToStorage();
+      renderChatConvList();
+      updateChatTotalBadge();
+    }
+
+    function openChatModal() {
+      chatModalObj.show();
+      renderChatConvList();
+      if (activeChatKey) renderChatThread(activeChatKey);
+    }
+
+    function isPatientKeyOnline(key) {
+      const peer = patientKeyToConnPeer.get(key);
+      return !!(peer && syncEngine.connections.some(c => c.peer === peer && c.open));
+    }
+
+    function renderChatConvList() {
+      const box = document.getElementById("chatConvList");
+      if (chatThreads.size === 0) {
+        box.innerHTML = '<div class="text-muted text-center small py-3 px-2">ยังไม่มีคนไข้ทักแชทเข้ามา</div>';
+        return;
+      }
+
+      // เรียงบทสนทนาที่มีข้อความล่าสุดขึ้นก่อน
+      const entries = Array.from(chatThreads.entries()).sort((a, b) => {
+        const lastA = a[1].messages[a[1].messages.length - 1];
+        const lastB = b[1].messages[b[1].messages.length - 1];
+        return (lastB ? lastB.ts : 0) - (lastA ? lastA.ts : 0);
+      });
+
+      box.innerHTML = entries.map(([key, thread]) => {
+        const lastMsg = thread.messages[thread.messages.length - 1];
+        const isActive = key === activeChatKey;
+        const isOnline = isPatientKeyOnline(key);
+        return `
+          <div class="p-2 border-bottom small ${isActive ? 'bg-primary bg-opacity-10' : ''}" style="cursor:pointer;" onclick="selectChatConversation('${key}')">
+            <div class="d-flex justify-content-between align-items-center">
+              <strong class="text-truncate" style="max-width:130px;">${escapeHtml(thread.patientName)}</strong>
+              ${thread.unread > 0 ? `<span class="badge bg-danger rounded-pill">${thread.unread}</span>` : ''}
+            </div>
+            <div class="text-muted text-truncate" style="max-width:190px;">${lastMsg ? escapeHtml(lastMsg.text) : ''}</div>
+            <div class="${isOnline ? 'text-success' : 'text-muted'}" style="font-size:10px;">${isOnline ? '● ออนไลน์' : '○ ออฟไลน์'}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectChatConversation(key) {
+      activeChatKey = key;
+      const thread = chatThreads.get(key);
+      if (thread) thread.unread = 0;
+
+      const isOnline = isPatientKeyOnline(key);
+      document.getElementById("chatActiveHeader").innerText =
+        (thread ? thread.patientName : key) + (isOnline ? " · ออนไลน์" : " · ออฟไลน์ (ส่งข้อความไม่ได้)");
+
+      document.getElementById("chatReplyInput").disabled = !isOnline;
+      document.getElementById("chatReplyBtn").disabled = !isOnline;
+
+      renderChatThread(key);
+      renderChatConvList();
+      saveChatThreadsToStorage();
+      updateChatTotalBadge();
+    }
+
+    function renderChatThread(key) {
+      const thread = chatThreads.get(key);
+      const area = document.getElementById("chatThreadArea");
+      if (!thread) { area.innerHTML = ''; return; }
+
+      area.innerHTML = thread.messages.map(m => {
+        const isMe = m.sender === "pharmacy";
+        return `
+          <div class="mb-2 d-flex ${isMe ? 'justify-content-end' : 'justify-content-start'}">
+            <div>
+              <div class="px-2 py-1 rounded small ${isMe ? 'bg-primary text-white' : 'bg-white border'}" style="max-width:280px;">
+                ${escapeHtml(m.text)}
+              </div>
+              <div class="text-muted text-end" style="font-size:10px;">${new Date(m.ts).toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit'})}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      area.scrollTop = area.scrollHeight;
+    }
+
+    function updateChatTotalBadge() {
+      let total = 0;
+      chatThreads.forEach(t => total += t.unread);
+      const badge = document.getElementById("chatTotalBadge");
+      if (total > 0) {
+        badge.innerText = total;
+        badge.classList.remove("d-none");
+      } else {
+        badge.classList.add("d-none");
+      }
+    }
+
+    function setupChatReplyForm() {
+      document.getElementById("chatReplyForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (!activeChatKey) return;
+
+        const input = document.getElementById("chatReplyInput");
+        const text = input.value.trim();
+        if (!text) return;
+
+        const connPeer = patientKeyToConnPeer.get(activeChatKey);
+        const conn = syncEngine.connections.find(c => c.peer === connPeer && c.open);
+        if (!conn) {
+          alert("คนไข้ออฟไลน์แล้ว ไม่สามารถส่งข้อความได้ในขณะนี้");
+          return;
+        }
+
+        const payload = { sender: "pharmacy", text, ts: Date.now() };
+        conn.send({ type: "CHAT_MESSAGE", payload });
+
+        const thread = chatThreads.get(activeChatKey);
+        if (thread) thread.messages.push(payload);
+
+        saveChatThreadsToStorage();
+        renderChatThread(activeChatKey);
+        renderChatConvList();
+        input.value = "";
+      });
     }
 
     function toggleDosingInputUI(prefix) {
@@ -1013,6 +1241,7 @@
     async function refreshData() {
       currentMeds = await dbEngine.getAll("medicine");
       const patients = await dbEngine.getAll("patient");
+      currentPatients = patients;
       currentArticles = await dbEngine.getAll("article");
 
       const medList = document.getElementById("medList");

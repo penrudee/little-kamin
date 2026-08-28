@@ -121,6 +121,11 @@ class SyncEngine {
       const targetPatient = patients.find((p) => p.patient_special_id === data.patientSpecialId);
       const targetBills = bills.filter((b) => b.patientSpecialId === data.patientSpecialId || (targetPatient && b.patientName === targetPatient.full_name));
       conn.send({ type: "RESPONSE_PATIENT_HISTORY", payload: { patient: targetPatient, bills: targetBills } });
+
+      // แจ้ง UI หน้าร้าน (ถ้ามี) ว่าคนไข้รายนี้ออนไลน์อยู่ตอนนี้ ผ่าน conn ไหน (ใช้ทำสถานะออนไลน์ในแชทให้แม่นตั้งแต่ยังไม่ทัก)
+      if (typeof notifyPatientPresence === "function") {
+        notifyPatientPresence(conn, data.patientSpecialId);
+      }
     }
 
     if (data.type === "CHAT_MESSAGE") {
