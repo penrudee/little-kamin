@@ -277,6 +277,12 @@
       <span class="navbar-text text-warning" id="clientCountDisplay">
         การเชื่อมต่อ Active: 0 จุด
       </span> |
+      <div class="btn-group btn-group-sm mx-2" role="group">
+        <button class="btn btn-outline-success" id="statusBtnAvailable" onclick="setPharmacyStatus('available')">🟢 ว่าง</button>
+        <button class="btn btn-outline-warning" id="statusBtnQueue" onclick="openQueueCountPrompt()">🟡 รอคิว</button>
+        <button class="btn btn-outline-danger" id="statusBtnBusy" onclick="setPharmacyStatus('busy')">🔴 ไม่ว่าง</button>
+      </div>
+      <span class="navbar-text" id="currentStatusBadge"></span> |
       <span class="navbar-text text-secondary">
         <small id="smalltext">version 0.0.1.11</small>
       </span>
@@ -519,6 +525,7 @@
                 <th>เบอร์โทร</th>
                 <th>น้ำหนัก</th>
                 <th>Special QR ID</th>
+                <th class="text-center">จัดการ</th>
               </tr>
             </thead>
             <tbody id="patientTableBody"></tbody>
@@ -859,6 +866,8 @@
         syncEngine.initPeer(true);
       }
 
+      await loadPharmacyStatus();
+
       addAgeBracketRow('add', 0, 24, 20);
       addAgeBracketRow('add', 24, 144, 40);
 
@@ -883,6 +892,77 @@
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('d-none'));
       document.getElementById(tabId).classList.remove('d-none');
+    }
+
+    // ---------- สถานะร้าน (ว่าง/ไม่ว่าง/รอคิว) ----------
+    async function loadPharmacyStatus() {
+      const settings = await dbEngine.getAll("settings");
+      const rec = settings.find(s => s.key === "pharmacy_status");
+      if (rec && rec.value) {
+        try {
+          syncEngine.currentStatus = JSON.parse(rec.value);
+        } catch (e) { /* ignore malformed */ }
+      }
+      renderStatusUI();
+    }
+
+    async function setPharmacyStatus(state, queueCount = 0) {
+      const status = syncEngine.setStatus(state, queueCount); // อัปเดต + broadcast ให้คนไข้ที่ต่ออยู่
+      await dbEngine.update("settings", { key: "pharmacy_status", value: JSON.stringify(status) });
+      renderStatusUI();
+    }
+
+    function openQueueCountPrompt() {
+      const current = (syncEngine.currentStatus && syncEngine.currentStatus.state === 'queue')
+        ? syncEngine.currentStatus.queueCount : 1;
+      const input = prompt("ระบุจำนวนคิวที่รออยู่:", current || 1);
+      if (input === null) return;
+      const count = Math.max(0, parseInt(input, 10) || 0);
+      setPharmacyStatus('queue', count);
+    }
+
+    function renderStatusUI() {
+      const badge = document.getElementById("currentStatusBadge");
+      const map = {
+        available: { text: "🟢 ว่าง", cls: "text-success" },
+        busy: { text: "🔴 ไม่ว่าง", cls: "text-danger" },
+        queue: { text: `🟡 รอคิว ${syncEngine.currentStatus ? syncEngine.currentStatus.queueCount : 0} คิว`, cls: "text-warning" }
+      };
+      const st = syncEngine.currentStatus;
+      if (!st) {
+        badge.className = "navbar-text text-muted";
+        badge.innerText = "ยังไม่ได้ตั้งสถานะ";
+        return;
+      }
+      const info = map[st.state] || { text: "ไม่ทราบสถานะ", cls: "text-muted" };
+      badge.className = "navbar-text fw-bold " + info.cls;
+      badge.innerText = info.text;
+    }
+
+    // ---------- บล็อกคนไข้ที่สแปม ----------
+    async function blockPatientUI(patientSpecialId) {
+      if (!confirm(`ต้องการบล็อกคนไข้รหัส ${patientSpecialId} ไม่ให้เข้าดูประวัติ/แชทผ่านระบบนี้ใช่หรือไม่?`)) return;
+      await syncEngine.blockPatient(patientSpecialId);
+      await refreshData();
+    }
+
+    async function unblockPatientUI(patientSpecialId) {
+      await syncEngine.unblockPatient(patientSpecialId);
+      await refreshData();
+    }
+
+    // ---------- รับข้อความแชทจากคนไข้ (เรียกจาก webrtc.js: handleIncomingData -> CHAT_MESSAGE) ----------
+    function handleIncomingChat(conn, payload) {
+      // TODO: ต่อ UI แชทฝั่งร้านจริง (กล่องข้อความ + ให้เภสัชกรพิมพ์ตอบ)
+      // ตอนนี้ log ไว้ก่อน และตอบรับอัตโนมัติ เพื่อยืนยันว่าข้อความถึงแล้ว
+      console.log("ข้อความจากคนไข้ (" + conn.peer + "):", payload);
+
+      if (conn.open) {
+        conn.send({
+          type: "CHAT_MESSAGE",
+          payload: { sender: "pharmacy", text: "ร้านได้รับข้อความแล้ว จะรีบตอบกลับครับ", ts: Date.now() }
+        });
+      }
     }
 
     function toggleDosingInputUI(prefix) {
@@ -982,7 +1062,11 @@
         if (p.phone) {
           patList.innerHTML += `<option value="${p.phone}">${p.full_name} | รหัส: ${p.patient_special_id}</option>`;
         }
-        patTable.innerHTML += `<tr><td>${p.id}</td><td>${p.full_name}</td><td>${p.age || '-'}</td><td>${p.phone || '-'}</td><td>${p.weight || '-'} kg</td><td>${p.patient_special_id}</td></tr>`;
+        const isBlocked = syncEngine.blockedPatientIds && syncEngine.blockedPatientIds.has(p.patient_special_id);
+        const blockBtn = isBlocked
+          ? `<button class="btn btn-sm btn-outline-secondary" onclick="unblockPatientUI('${p.patient_special_id}')">✅ ปลดบล็อก</button>`
+          : `<button class="btn btn-sm btn-outline-danger" onclick="blockPatientUI('${p.patient_special_id}')">🚫 บล็อก</button>`;
+        patTable.innerHTML += `<tr${isBlocked ? ' class="table-danger"' : ''}><td>${p.id}</td><td>${escapeHtml(p.full_name)}</td><td>${p.age || '-'}</td><td>${p.phone || '-'}</td><td>${p.weight || '-'} kg</td><td>${p.patient_special_id}</td><td class="text-center">${blockBtn}</td></tr>`;
       });
 
       renderArticleList();
