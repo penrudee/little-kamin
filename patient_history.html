@@ -20,6 +20,9 @@
         ⏳ กำลังเชื่อมต่อไปยังระบบคลังยาของร้าน...
       </div>
 
+      <!-- Pharmacy Status Banner -->
+      <div id="pharmacyStatus" class="alert text-center py-2 mb-3 d-none fw-bold"></div>
+
       <!-- Patient Info -->
       <div id="patientProfile" class="d-none">
         <div class="border-bottom pb-2 mb-3">
@@ -42,8 +45,33 @@
   </div>
 </div>
 
+<!-- ===== ปุ่มแชท (ลอยมุมขวาล่าง) ===== -->
+<button id="openChatBtn" class="btn btn-primary rounded-circle shadow d-none"
+  style="position:fixed;bottom:24px;right:24px;width:60px;height:60px;font-size:22px;z-index:1000;">
+  💬
+</button>
+<span id="chatBadge" class="badge bg-danger rounded-pill d-none"
+  style="position:fixed;bottom:70px;right:20px;z-index:1001;">0</span>
+
+<!-- ===== แผงแชท ===== -->
+<div id="chatPanel" class="card shadow d-none"
+  style="position:fixed;bottom:24px;right:24px;width:320px;max-height:70vh;z-index:1002;display:flex;flex-direction:column;">
+  <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
+    <span class="fw-bold small">💬 แชทกับร้านยา</span>
+    <button id="closeChatBtn" class="btn-close btn-close-white" style="font-size:12px;"></button>
+  </div>
+  <div id="chatMessages" class="p-2 flex-grow-1" style="overflow-y:auto;height:280px;background:#f8f9fa;"></div>
+  <form id="chatForm" class="d-flex gap-1 p-2 border-top bg-white">
+    <input id="chatInput" type="text" class="form-control form-control-sm" placeholder="พิมพ์ข้อความ..." autocomplete="off" disabled>
+    <button type="submit" class="btn btn-primary btn-sm" disabled id="chatSendBtn">ส่ง</button>
+  </form>
+</div>
+
 <script>
 let peer = null;
+let conn = null; // เก็บ reference ไว้ใช้ร่วมกันทั้งดึงประวัติและแชท
+let unreadCount = 0;
+let chatOpen = false;
 
 window.onload = () => {
   // ดึง Param จาก URL ที่สแกนได้จาก QR Code
@@ -59,6 +87,8 @@ window.onload = () => {
 
   // เริ่มต้นเชื่อมต่อ WebRTC ไปยังเครื่องร้านยา (Host) โดยไม่ต้องเข้าสู่ระบบ
   connectToHostStore(hostId, patientId);
+
+  setupChatUI();
 };
 
 function connectToHostStore(hostId, patientId) {
@@ -73,7 +103,7 @@ function connectToHostStore(hostId, patientId) {
   });
 
   peer.on("open", () => {
-    const conn = peer.connect(hostId, { reliable: true });
+    conn = peer.connect(hostId, { reliable: true });
 
     conn.on("open", () => {
       document.getElementById("connectionStatus").className = "alert alert-info text-center py-2";
@@ -84,16 +114,27 @@ function connectToHostStore(hostId, patientId) {
         type: "REQUEST_PATIENT_HISTORY",
         patientSpecialId: patientId
       });
+
+      // การเชื่อมต่อพร้อมใช้งานแล้ว เปิดปุ่มแชทได้
+      enableChat();
     });
 
     conn.on("data", (data) => {
       if (data.type === "RESPONSE_PATIENT_HISTORY") {
         renderPatientData(data.payload);
+      } else if (data.type === "CHAT_MESSAGE") {
+        addChatMessage(data.payload, false);
+      } else if (data.type === "STATUS_UPDATE") {
+        renderPharmacyStatus(data.payload);
+      } else if (data.type === "BLOCKED") {
+        showError(data.payload && data.payload.reason ? data.payload.reason : "การเชื่อมต่อถูกระงับโดยร้านยา");
+        disableChat();
       }
     });
 
     conn.on("close", () => {
       console.log("Connection closed");
+      disableChat();
     });
 
     conn.on("error", (err) => {
@@ -105,6 +146,108 @@ function connectToHostStore(hostId, patientId) {
     showError("การเชื่อมต่อ P2P ขัดข้อง กรุณาลองสแกนใหม่อีกครั้ง");
   });
 }
+
+/* ================== CHAT ================== */
+
+function setupChatUI() {
+  const openBtn = document.getElementById("openChatBtn");
+  const closeBtn = document.getElementById("closeChatBtn");
+  const panel = document.getElementById("chatPanel");
+  const form = document.getElementById("chatForm");
+  const input = document.getElementById("chatInput");
+
+  openBtn.addEventListener("click", () => {
+    chatOpen = true;
+    panel.classList.remove("d-none");
+    openBtn.classList.add("d-none");
+    clearBadge();
+    input.focus();
+  });
+
+  closeBtn.addEventListener("click", () => {
+    chatOpen = false;
+    panel.classList.add("d-none");
+    openBtn.classList.remove("d-none");
+  });
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text || !conn || !conn.open) return;
+
+    const payload = { sender: "patient", text, ts: Date.now() };
+    conn.send({ type: "CHAT_MESSAGE", payload });
+    addChatMessage(payload, true);
+    input.value = "";
+  });
+}
+
+function enableChat() {
+  document.getElementById("openChatBtn").classList.remove("d-none");
+  document.getElementById("chatInput").disabled = false;
+  document.getElementById("chatSendBtn").disabled = false;
+}
+
+function disableChat() {
+  document.getElementById("openChatBtn").classList.add("d-none");
+  document.getElementById("chatPanel").classList.add("d-none");
+  document.getElementById("chatInput").disabled = true;
+  document.getElementById("chatSendBtn").disabled = true;
+}
+
+function addChatMessage(payload, isMe) {
+  const el = document.getElementById("chatMessages");
+  const div = document.createElement("div");
+  div.className = "mb-2 d-flex " + (isMe ? "justify-content-end" : "justify-content-start");
+
+  const bubble = document.createElement("div");
+  bubble.className = "px-2 py-1 rounded small " + (isMe ? "bg-primary text-white" : "bg-white border");
+  bubble.style.maxWidth = "80%";
+  bubble.innerText = payload.text; // ใช้ innerText กัน XSS
+
+  const wrap = document.createElement("div");
+  wrap.appendChild(bubble);
+  const time = document.createElement("div");
+  time.className = "text-muted text-end small";
+  time.style.fontSize = "10px";
+  time.innerText = new Date(payload.ts).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  wrap.appendChild(time);
+
+  div.appendChild(wrap);
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+
+  if (!isMe && !chatOpen) bumpBadge();
+}
+
+function bumpBadge() {
+  unreadCount++;
+  const badge = document.getElementById("chatBadge");
+  badge.innerText = unreadCount;
+  badge.classList.remove("d-none");
+}
+
+function clearBadge() {
+  unreadCount = 0;
+  document.getElementById("chatBadge").classList.add("d-none");
+}
+
+function renderPharmacyStatus(status) {
+  const el = document.getElementById("pharmacyStatus");
+  el.classList.remove("d-none");
+
+  const map = {
+    available: { text: "🟢 ร้านยาว่าง สามารถเข้ารับบริการได้เลย", cls: "alert-success" },
+    busy:      { text: "🔴 ร้านยาไม่ว่างในขณะนี้", cls: "alert-danger" },
+    queue:     { text: `🟡 มีคิวรออยู่${status.queueCount ? " " + status.queueCount + " คิว" : ""}`, cls: "alert-warning" }
+  };
+
+  const info = map[status.state] || { text: "ไม่ทราบสถานะร้าน", cls: "alert-secondary" };
+  el.className = "alert text-center py-2 mb-3 fw-bold " + info.cls;
+  el.innerText = info.text;
+}
+
+/* ============== (โค้ดเดิม: แสดงประวัติยา) ============== */
 
 function renderPatientData(payload) {
   const { patient, bills } = payload;
