@@ -26,12 +26,43 @@
       <!-- Patient Info -->
       <div id="patientProfile" class="d-none">
         <div class="border-bottom pb-2 mb-3">
-          <h5 class="fw-bold text-success" id="pName">-</h5>
+          <div class="d-flex justify-content-between align-items-start">
+            <h5 class="fw-bold text-success" id="pName">-</h5>
+            <button class="btn btn-sm btn-outline-primary" onclick="toggleEditPatientForm()" id="editPatientToggleBtn">✏️ แก้ไขข้อมูล</button>
+          </div>
           <div class="row text-muted small">
             <div class="col-6">อายุ: <span id="pAge" class="fw-bold text-dark">-</span> ปี</div>
             <div class="col-6">น้ำหนัก: <span id="pWeight" class="fw-bold text-dark">-</span> kg</div>
             <div class="col-12 mt-1">รหัสคนไข้: <span id="pCode" class="fw-bold text-dark">-</span></div>
+            <div class="col-12 mt-1">เบอร์โทร: <span id="pPhone" class="fw-bold text-dark">-</span></div>
           </div>
+
+          <!-- ฟอร์มแก้ไขข้อมูล -->
+          <form id="editPatientForm" class="d-none mt-3 p-2 border rounded bg-light">
+            <div class="mb-2">
+              <label class="form-label small mb-1">ชื่อ-นามสกุล</label>
+              <input type="text" id="editPName" class="form-control form-control-sm" required>
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label small mb-1">อายุ (ปี)</label>
+                <input type="number" step="0.1" id="editPAge" class="form-control form-control-sm">
+              </div>
+              <div class="col-6">
+                <label class="form-label small mb-1">น้ำหนัก (kg)</label>
+                <input type="number" step="0.1" id="editPWeight" class="form-control form-control-sm">
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small mb-1">เบอร์โทรศัพท์</label>
+              <input type="tel" id="editPPhone" class="form-control form-control-sm">
+            </div>
+            <div id="editPatientMsg" class="small mb-2"></div>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-sm btn-success w-100" id="editPatientSaveBtn">📨 ส่งคำขอแก้ไข</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="toggleEditPatientForm(false)">ยกเลิก</button>
+            </div>
+          </form>
         </div>
 
         <h6 class="fw-bold mb-2">📜 ประวัติการซื้อยาล่าสุด</h6>
@@ -72,12 +103,15 @@ let peer = null;
 let conn = null; // เก็บ reference ไว้ใช้ร่วมกันทั้งดึงประวัติและแชท
 let unreadCount = 0;
 let chatOpen = false;
+let currentPatientId = null;
+let currentPatientData = null;
 
 window.onload = () => {
   // ดึง Param จาก URL ที่สแกนได้จาก QR Code
   const urlParams = new URLSearchParams(window.location.search);
   const hostId = urlParams.get("hostId");
   const patientId = urlParams.get("patientId");
+  currentPatientId = patientId;
 
   if (!hostId || !patientId) {
     document.getElementById("connectionStatus").className = "alert alert-danger text-center py-2";
@@ -129,6 +163,16 @@ function connectToHostStore(hostId, patientId) {
       } else if (data.type === "BLOCKED") {
         showError(data.payload && data.payload.reason ? data.payload.reason : "การเชื่อมต่อถูกระงับโดยร้านยา");
         disableChat();
+      } else if (data.type === "PATIENT_INFO_UPDATED") {
+        onPatientInfoUpdated(data.payload);
+      } else if (data.type === "PATIENT_INFO_UPDATE_FAILED") {
+        showEditPatientMsg(data.payload && data.payload.reason ? data.payload.reason : "แก้ไขข้อมูลไม่สำเร็จ", true);
+      } else if (data.type === "PATIENT_INFO_UPDATE_REQUESTED") {
+        showEditPatientMsg("📨 ส่งคำขอแก้ไขข้อมูลแล้ว รอร้านยาตรวจสอบและอนุมัติ", false);
+      } else if (data.type === "PATIENT_INFO_UPDATE_APPROVED") {
+        onPatientInfoUpdated(data.payload);
+      } else if (data.type === "PATIENT_INFO_UPDATE_REJECTED") {
+        showEditPatientMsg("❌ ร้านยาไม่อนุมัติคำขอแก้ไขข้อมูลนี้" + (data.payload && data.payload.reason ? (": " + data.payload.reason) : ""), true);
       }
     });
 
@@ -268,6 +312,8 @@ function renderPatientData(payload) {
   document.getElementById("pAge").innerText = patient ? (patient.age || "-") : "-";
   document.getElementById("pWeight").innerText = patient ? (patient.weight || "-") : "-";
   document.getElementById("pCode").innerText = patient ? patient.patient_special_id : "-";
+  document.getElementById("pPhone").innerText = patient ? (patient.phone || "-") : "-";
+  currentPatientData = patient || null;
 
   // แสดงรายการบิล/ยาที่เคยได้รับ (ไม่แสดงราคา)
   const listEl = document.getElementById("billHistoryList");
@@ -347,6 +393,85 @@ function toggleArticle(contentId, btn) {
   const isHidden = el.classList.contains("d-none");
   el.classList.toggle("d-none");
   btn.innerText = isHidden ? "ซ่อนเนื้อหา" : "อ่านเนื้อหาเต็ม";
+}
+
+function toggleEditPatientForm(show) {
+  const form = document.getElementById("editPatientForm");
+  const shouldShow = show === undefined ? form.classList.contains("d-none") : show;
+
+  if (shouldShow) {
+    if (!currentPatientData) {
+      alert("ไม่พบข้อมูลคนไข้ที่จะแก้ไข");
+      return;
+    }
+    document.getElementById("editPName").value = currentPatientData.full_name || "";
+    document.getElementById("editPAge").value = currentPatientData.age || "";
+    document.getElementById("editPWeight").value = currentPatientData.weight || "";
+    document.getElementById("editPPhone").value = currentPatientData.phone || "";
+    document.getElementById("editPatientMsg").innerHTML = "";
+    form.classList.remove("d-none");
+  } else {
+    form.classList.add("d-none");
+  }
+}
+
+document.getElementById("editPatientForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  if (!conn || !conn.open) {
+    showEditPatientMsg("ยังไม่ได้เชื่อมต่อกับร้านยา กรุณาลองใหม่อีกครั้ง", true);
+    return;
+  }
+
+  const payload = {
+    full_name: document.getElementById("editPName").value.trim(),
+    age: document.getElementById("editPAge").value,
+    weight: document.getElementById("editPWeight").value,
+    phone: document.getElementById("editPPhone").value.trim()
+  };
+
+  if (!payload.full_name) {
+    showEditPatientMsg("กรุณากรอกชื่อ-นามสกุล", true);
+    return;
+  }
+
+  document.getElementById("editPatientSaveBtn").disabled = true;
+  document.getElementById("editPatientSaveBtn").innerText = "กำลังส่งคำขอ...";
+
+  conn.send({
+    type: "REQUEST_PATIENT_INFO_UPDATE",
+    patientSpecialId: currentPatientId,
+    payload: payload
+  });
+});
+
+function onPatientInfoUpdated(updatedPatient) {
+  currentPatientData = updatedPatient;
+
+  document.getElementById("pName").innerText = updatedPatient.full_name || "-";
+  document.getElementById("pAge").innerText = updatedPatient.age || "-";
+  document.getElementById("pWeight").innerText = updatedPatient.weight || "-";
+  document.getElementById("pPhone").innerText = updatedPatient.phone || "-";
+
+  showEditPatientMsg("✅ ร้านยาอนุมัติคำขอแล้ว บันทึกข้อมูลเรียบร้อย", false);
+
+  const btn = document.getElementById("editPatientSaveBtn");
+  btn.disabled = false;
+  btn.innerText = "💾 ส่งคำขอแก้ไข";
+
+  setTimeout(() => toggleEditPatientForm(false), 1500);
+}
+
+function showEditPatientMsg(text, isError) {
+  const el = document.getElementById("editPatientMsg");
+  el.className = "small mb-2 " + (isError ? "text-danger" : "text-success");
+  el.innerText = text;
+
+  const btn = document.getElementById("editPatientSaveBtn");
+  if (isError) {
+    btn.disabled = false;
+    btn.innerText = "📨 ส่งคำขอแก้ไข";
+  }
 }
 
 function showError(msg) {

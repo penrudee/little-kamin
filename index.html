@@ -273,6 +273,7 @@
         <button class="nav-link btn btn-link" onclick="switchTab('patientTab')">3. คนไข้(F3)</button>
         <button class="nav-link btn btn-link" onclick="switchTab('articleTab')">4. บทความ(F4)</button>
         <button class="nav-link btn btn-link" onclick="switchTab('appointmentTab')">📅 นัดหมาย <span id="apptNavBadge" class="badge bg-danger rounded-pill d-none">0</span></button>
+        <button class="nav-link btn btn-link" onclick="switchTab('editRequestTab')">✏️ คำขอแก้ไข <span id="editReqNavBadge" class="badge bg-danger rounded-pill d-none">0</span></button>
         <a class="nav-link" href="settings.html">5. ตั้งค่า(F5)</a>
       </div>
       <span class="navbar-text text-warning" id="clientCountDisplay">
@@ -421,6 +422,16 @@
         <div class="card-header bg-dark text-white">📅 คำขอนัดหมายจากคนไข้</div>
         <div class="card-body" id="appointmentListBody">
           <div class="text-muted text-center py-3">ยังไม่มีคำขอนัดหมาย</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: คำขอแก้ไขข้อมูลคนไข้ -->
+    <div id="editRequestTab" class="tab-content d-none">
+      <div class="card">
+        <div class="card-header bg-dark text-white">✏️ คำขอแก้ไขข้อมูลคนไข้</div>
+        <div class="card-body" id="editRequestListBody">
+          <div class="text-muted text-center py-3">ยังไม่มีคำขอแก้ไขข้อมูล</div>
         </div>
       </div>
     </div>
@@ -828,6 +839,8 @@
     const CHAT_STORAGE_KEY = "lk_chat_threads_v1";
     let appointments = [];
     const APPT_STORAGE_KEY = "lk_appointments_v1";
+    let editRequests = [];
+    const EDIT_REQ_STORAGE_KEY = "lk_patient_edit_requests_v1";
     const currentUser = sessionStorage.getItem("loggedInUser") || "";
 
     window.onload = async () => {
@@ -844,6 +857,8 @@
       loadChatThreadsFromStorage();
       loadAppointmentsFromStorage();
       renderAppointmentList();
+      loadEditRequestsFromStorage();
+      renderEditRequestList();
       setupChatReplyForm();
       const medNameInput = document.getElementById("posMedName");
       // F12 check out
@@ -1092,10 +1107,18 @@
         const timeStr = new Date(a.requestedAt).toLocaleString("th-TH");
         const preferredStr = a.preferredTime ? new Date(a.preferredTime).toLocaleString("th-TH") : "-";
 
-        const actions = a.status === "pending" ? `
+        // เช็คว่าเบอร์นี้มีประวัติคนไข้อยู่แล้วในระบบหรือยัง
+        const existingPatient = currentPatients.find(p => p.phone && a.phone && p.phone.trim() === a.phone.trim());
+        const alreadyLinked = a.linkedPatientSpecialId || (existingPatient ? existingPatient.patient_special_id : null);
+
+        const decisionActions = a.status === "pending" ? `
           <button class="btn btn-sm btn-success me-1" onclick="acceptAppointment('${a.id}')">✅ รับนัด</button>
           <button class="btn btn-sm btn-outline-danger" onclick="declineAppointment('${a.id}')">✕ ปฏิเสธ</button>
         ` : `<button class="btn btn-sm btn-outline-secondary" onclick="removeAppointment('${a.id}')">ลบออกจากรายการ</button>`;
+
+        const patientRecordAction = alreadyLinked
+          ? `<div class="small text-success mt-1">✓ มีประวัติคนไข้แล้ว (รหัส: ${escapeHtml(alreadyLinked)})</div>`
+          : `<button class="btn btn-sm btn-outline-primary mt-1" onclick="createPatientFromAppointment('${a.id}')">💾 บันทึกเข้าประวัติคนไข้</button>`;
 
         return `
           <div class="card mb-2 border">
@@ -1107,16 +1130,54 @@
                   <div class="small text-muted">ขอนัดเมื่อ: ${timeStr}</div>
                   <div class="small text-muted">เวลาที่สะดวก: ${preferredStr}</div>
                   ${a.note ? `<div class="small mt-1">📝 ${escapeHtml(a.note)}</div>` : ''}
+                  ${patientRecordAction}
                 </div>
                 <div class="text-end">
                   ${statusBadge[a.status] || ''}
-                  <div class="mt-2">${actions}</div>
+                  <div class="mt-2">${decisionActions}</div>
                 </div>
               </div>
             </div>
           </div>
         `;
       }).join('');
+    }
+
+    // บันทึกคำขอนัดเข้าเป็นประวัติคนไข้จริงในระบบ (ใช้เมื่อเบอร์/ชื่อยังไม่มีในฐานข้อมูล)
+    async function createPatientFromAppointment(id) {
+      const appt = appointments.find(a => a.id === id);
+      if (!appt) return;
+
+      const existingPatient = currentPatients.find(p => p.phone && p.phone.trim() === appt.phone.trim());
+      if (existingPatient) {
+        alert(`เบอร์นี้มีประวัติคนไข้อยู่แล้ว: ${existingPatient.full_name} (รหัส: ${existingPatient.patient_special_id})`);
+        appt.linkedPatientSpecialId = existingPatient.patient_special_id;
+        saveAppointmentsToStorage();
+        renderAppointmentList();
+        return;
+      }
+
+      const patientData = {
+        full_name: appt.name,
+        age: "",
+        weight: "",
+        phone: appt.phone,
+        patient_special_id: "PAT-" + Math.floor(1000 + Math.random() * 9000),
+        timestamp: new Date().toISOString()
+      };
+
+      const newId = await dbEngine.add("patient", patientData);
+      patientData.id = newId;
+
+      syncEngine.broadcastData({ type: "SYNC_DB", store: "patient", payload: patientData });
+
+      appt.linkedPatientSpecialId = patientData.patient_special_id;
+      saveAppointmentsToStorage();
+
+      await refreshData();
+      renderAppointmentList();
+
+      alert(`บันทึกประวัติคนไข้ "${appt.name}" เรียบร้อยแล้ว (รหัส: ${patientData.patient_special_id})`);
     }
 
     function acceptAppointment(id) {
@@ -1163,6 +1224,154 @@
       appointments = appointments.filter(a => a.id !== id);
       saveAppointmentsToStorage();
       renderAppointmentList();
+    }
+
+    // ---------- คำขอแก้ไขข้อมูลคนไข้: persist ผ่าน localStorage ----------
+    function loadEditRequestsFromStorage() {
+      try {
+        const raw = localStorage.getItem(EDIT_REQ_STORAGE_KEY);
+        editRequests = raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        console.error("โหลดคำขอแก้ไขข้อมูลไม่สำเร็จ:", e);
+        editRequests = [];
+      }
+    }
+
+    function saveEditRequestsToStorage() {
+      try {
+        localStorage.setItem(EDIT_REQ_STORAGE_KEY, JSON.stringify(editRequests));
+      } catch (e) {
+        console.error("บันทึกคำขอแก้ไขข้อมูลไม่สำเร็จ:", e);
+      }
+    }
+
+    // เรียกจาก webrtc.js ทันทีที่มีคำขอแก้ไขข้อมูลเข้ามา (data.type === "REQUEST_PATIENT_INFO_UPDATE")
+    function handlePatientInfoUpdateRequest(conn, patientSpecialId, newPayload) {
+      const existingPatient = currentPatients.find(p => p.patient_special_id === patientSpecialId);
+
+      editRequests.unshift({
+        id: "editreq_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+        patientSpecialId: patientSpecialId,
+        connPeer: conn.peer,
+        oldData: existingPatient
+          ? { full_name: existingPatient.full_name, age: existingPatient.age, weight: existingPatient.weight, phone: existingPatient.phone }
+          : null,
+        newData: newPayload,
+        requestedAt: Date.now(),
+        status: "pending" // pending | approved | rejected
+      });
+
+      saveEditRequestsToStorage();
+      renderEditRequestList();
+    }
+
+    function renderEditRequestList() {
+      const box = document.getElementById("editRequestListBody");
+      const pendingCount = editRequests.filter(r => r.status === "pending").length;
+
+      const navBadge = document.getElementById("editReqNavBadge");
+      if (pendingCount > 0) {
+        navBadge.innerText = pendingCount;
+        navBadge.classList.remove("d-none");
+      } else {
+        navBadge.classList.add("d-none");
+      }
+
+      if (editRequests.length === 0) {
+        box.innerHTML = '<div class="text-muted text-center py-3">ยังไม่มีคำขอแก้ไขข้อมูล</div>';
+        return;
+      }
+
+      const statusBadge = {
+        pending: '<span class="badge bg-warning text-dark">รอตรวจสอบ</span>',
+        approved: '<span class="badge bg-success">อนุมัติแล้ว</span>',
+        rejected: '<span class="badge bg-secondary">ปฏิเสธแล้ว</span>'
+      };
+
+      const diffRow = (label, oldVal, newVal) => {
+        const changed = String(oldVal || '-') !== String(newVal || '-');
+        return `<div class="${changed ? 'text-danger fw-bold' : ''}">${label}: ${escapeHtml(String(oldVal || '-'))} ${changed ? '→ <span class="text-success">' + escapeHtml(String(newVal || '-')) + '</span>' : ''}</div>`;
+      };
+
+      box.innerHTML = editRequests.map(r => {
+        const isOnline = syncEngine.connections.some(c => c.peer === r.connPeer && c.open);
+        const timeStr = new Date(r.requestedAt).toLocaleString("th-TH");
+        const old = r.oldData || {};
+        const nw = r.newData || {};
+
+        const actions = r.status === "pending" ? `
+          <button class="btn btn-sm btn-success me-1" onclick="approveEditRequest('${r.id}')">✅ อนุมัติ</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="rejectEditRequest('${r.id}')">✕ ปฏิเสธ</button>
+        ` : `<button class="btn btn-sm btn-outline-secondary" onclick="removeEditRequest('${r.id}')">ลบออกจากรายการ</button>`;
+
+        return `
+          <div class="card mb-2 border">
+            <div class="card-body py-2">
+              <div class="d-flex justify-content-between align-items-start">
+                <div class="small">
+                  <div class="mb-1">
+                    <strong>รหัสคนไข้:</strong> ${escapeHtml(r.patientSpecialId || '-')}
+                    ${isOnline ? '<span class="text-success ms-1">● ออนไลน์</span>' : '<span class="text-muted ms-1">○ ออฟไลน์</span>'}
+                  </div>
+                  <div class="text-muted mb-1">ขอแก้ไขเมื่อ: ${timeStr}</div>
+                  ${r.oldData ? `
+                    ${diffRow('ชื่อ', old.full_name, nw.full_name)}
+                    ${diffRow('อายุ', old.age, nw.age)}
+                    ${diffRow('น้ำหนัก', old.weight, nw.weight)}
+                    ${diffRow('เบอร์โทร', old.phone, nw.phone)}
+                  ` : `<div class="text-warning">⚠️ ไม่พบประวัติคนไข้รหัสนี้ในระบบแล้ว (อาจถูกลบไปก่อนหน้า)</div>`}
+                </div>
+                <div class="text-end">
+                  ${statusBadge[r.status] || ''}
+                  <div class="mt-2">${actions}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function approveEditRequest(id) {
+      const req = editRequests.find(r => r.id === id);
+      if (!req) return;
+      if (!confirm("ยืนยันอนุมัติคำขอแก้ไขข้อมูลนี้? ข้อมูลคนไข้ในระบบจะถูกอัปเดตทันที")) return;
+
+      const updated = await syncEngine.applyPatientInfoUpdate(req.patientSpecialId, req.newData);
+      if (!updated) {
+        alert("ไม่พบประวัติคนไข้รหัสนี้ในระบบแล้ว ไม่สามารถอนุมัติได้");
+        req.status = "rejected";
+        saveEditRequestsToStorage();
+        renderEditRequestList();
+        return;
+      }
+
+      req.status = "approved";
+      saveEditRequestsToStorage();
+
+      syncEngine.sendToConn(req.connPeer, { type: "PATIENT_INFO_UPDATE_APPROVED", payload: updated });
+
+      await refreshData();
+      renderEditRequestList();
+    }
+
+    function rejectEditRequest(id) {
+      const req = editRequests.find(r => r.id === id);
+      if (!req) return;
+      if (!confirm("ยืนยันปฏิเสธคำขอแก้ไขข้อมูลนี้?")) return;
+
+      req.status = "rejected";
+      saveEditRequestsToStorage();
+
+      syncEngine.sendToConn(req.connPeer, { type: "PATIENT_INFO_UPDATE_REJECTED", payload: {} });
+
+      renderEditRequestList();
+    }
+
+    function removeEditRequest(id) {
+      editRequests = editRequests.filter(r => r.id !== id);
+      saveEditRequestsToStorage();
+      renderEditRequestList();
     }
 
     // เรียกจาก webrtc.js ทันทีที่รู้ว่า conn ไหนคือคนไข้คนไหน (ก่อนที่จะมีการแชทเกิดขึ้นด้วยซ้ำ)

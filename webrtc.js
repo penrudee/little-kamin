@@ -88,7 +88,7 @@ class SyncEngine {
 
   async handleIncomingData(conn, data) {
     // ----- กันสแปม: เช็คก่อนทุกอย่างสำหรับ type ที่คนไข้เป็นคนยิงเข้ามา -----
-    const patientTriggeredTypes = ["REQUEST_PATIENT_HISTORY", "CHAT_MESSAGE", "REQUEST_APPOINTMENT"];
+    const patientTriggeredTypes = ["REQUEST_PATIENT_HISTORY", "CHAT_MESSAGE", "REQUEST_APPOINTMENT", "REQUEST_PATIENT_INFO_UPDATE"];
     if (patientTriggeredTypes.includes(data.type)) {
       // จำ patientSpecialId ที่ conn นี้เคยขอ ไว้ใช้ตอนบล็อกย้อนหลัง
       const pid = data.patientSpecialId || (data.payload && data.payload.patientSpecialId);
@@ -141,6 +141,14 @@ class SyncEngine {
       conn.send({ type: "APPOINTMENT_ACK" });
       if (typeof handleIncomingAppointment === "function") {
         handleIncomingAppointment(conn, data.payload);
+      }
+    }
+
+    if (data.type === "REQUEST_PATIENT_INFO_UPDATE") {
+      // แค่รับคำขอไว้ก่อน ยังไม่แก้ข้อมูลจริง ต้องรอเภสัชกรอนุมัติที่หน้าร้าน
+      conn.send({ type: "PATIENT_INFO_UPDATE_REQUESTED" });
+      if (typeof handlePatientInfoUpdateRequest === "function") {
+        handlePatientInfoUpdateRequest(conn, data.patientSpecialId, data.payload);
       }
     }
 
@@ -225,6 +233,37 @@ class SyncEngine {
   async unblockPatient(patientSpecialId) {
     this.blockedPatientIds.delete(patientSpecialId);
     await this.saveBlockedList();
+  }
+
+  // ----- ใช้ตอนเภสัชกรอนุมัติคำขอแก้ไขข้อมูลคนไข้ -----
+  async applyPatientInfoUpdate(patientSpecialId, payload) {
+    const patients = await dbEngine.getAll("patient");
+    const target = patients.find((p) => p.patient_special_id === patientSpecialId);
+    if (!target) return null;
+
+    const updated = {
+      ...target,
+      full_name: payload.full_name || target.full_name,
+      age: payload.age,
+      weight: payload.weight,
+      phone: payload.phone
+    };
+    updated.id = target.id;
+    updated.patient_special_id = target.patient_special_id;
+
+    await dbEngine.update("patient", updated);
+    this.broadcastData({ type: "SYNC_DB", store: "patient", payload: updated });
+    return updated;
+  }
+
+  // ส่งข้อความหา connection เฉพาะราย (เช่น แจ้งผลอนุมัติ/ปฏิเสธคำขอ) — คืน true ถ้าส่งสำเร็จ (ยังออนไลน์อยู่)
+  sendToConn(connPeer, data) {
+    const conn = this.connections.find((c) => c.peer === connPeer && c.open);
+    if (conn) {
+      conn.send(data);
+      return true;
+    }
+    return false;
   }
 
   renderQRCode(peerId) {
