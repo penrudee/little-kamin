@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ประวัติการรับบริการและประวัติยา - LittleKaminPOS</title>
 
-  <!-- Auth Guard: ต้องอยู่บนสุดของ <head> ก่อนสคริปต์/สไตล์อื่นใด
-       เพื่อสกัดผู้ที่เข้าถึง html ตรงๆ โดยยังไม่ผ่าน zybook_login.html
-       (ป้องกันทั้งการ render เนื้อหาก่อน redirect และการรันโค้ดอื่นๆ ที่ไม่ควรทำงาน) -->
+  <!-- Auth Guard -->
   <script>
     if (sessionStorage.getItem('is_authenticated') !== 'true') {
       window.location.replace('login.html');
