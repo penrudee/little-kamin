@@ -43,20 +43,22 @@
     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-md">
-          <span id="avatarLetter">A</span>
+          <span id="avatarLetter">P</span>
         </div>
         <div>
-          <div class="flex items-center space-x-2">
-            <span class="font-bold text-white text-sm" id="displayStoreName">กำลังโหลด...</span>
-            <span class="text-xs text-blue-400 font-mono bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20" id="displayKeyTag">#----</span>
+          <!-- ชื่อร้านค้า (หลัก) -->
+          <div class="font-bold text-white text-base" id="displayStoreName">กำลังโหลด...</div>
+          <!-- Username + Unique Key ID (ใต้ชื่อร้าน) -->
+          <div class="flex items-center space-x-2 text-xs text-slate-400 mt-0.5">
+            <span class="text-slate-300 font-medium" id="displayUsername">@user</span>
+            <span class="text-[11px] text-blue-400 font-mono bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20" id="displayKeyTag">#----</span>
           </div>
-          <div class="text-[11px] text-slate-500 font-mono mt-0.5" id="displayPubKey">ECDSA Identity Active</div>
         </div>
       </div>
-      <span class="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full font-mono">Unique Key Verified</span>
+      <span class="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full font-mono">Verified Node</span>
     </div>
 
-    <!-- Create Post Composer (Twitter-style) -->
+    <!-- Create Post Composer -->
     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
       <textarea id="postText" rows="3" placeholder="มีข่าวยาใหม่ อัปเดตคลัง หรือข้อความถึงเพื่อนร้านยา..." 
         class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none transition"></textarea>
@@ -99,9 +101,11 @@
     let privateKeyObj = null;
     let myKeyTag = '----';
 
-    // ตรวจสอบการเข้าสู่ระบบ
-    const storeName = sessionStorage.getItem('active_store_name');
-    if (!storeName) {
+    // ตรวจสอบการเข้าสู่ระบบ & ดึงข้อมูล
+    const storeName = sessionStorage.getItem('active_store_name') || 'ร้านยาชุมชน';
+    const username = sessionStorage.getItem('active_username') || 'admin';
+
+    if (!sessionStorage.getItem('is_authenticated')) {
       window.location.href = 'zybook_login.html';
     }
 
@@ -109,8 +113,9 @@
       // 1. โหลด Key และดึง Key Tag สั้นๆ ประจำเครื่อง
       await loadCryptoIdentity();
 
-      // 2. แสดงชื่อร้านและ Tag ประจำเครื่อง
+      // 2. แสดงชื่อร้าน และ Username คู่กับ Unique Key Tag
       document.getElementById('displayStoreName').textContent = storeName;
+      document.getElementById('displayUsername').textContent = `@${username}`;
       document.getElementById('displayKeyTag').textContent = `#${myKeyTag}`;
       document.getElementById('avatarLetter').textContent = storeName.charAt(0).toUpperCase();
 
@@ -118,7 +123,7 @@
       initYjsFeed();
     });
 
-    // ดึง Public/Private Key และคำนวณ Fingerprint สั้นๆ
+    // ดึง Key และสร้าง Unique Tag
     async function loadCryptoIdentity() {
       try {
         const privJwk = JSON.parse(localStorage.getItem('pharmacy_priv_key'));
@@ -132,8 +137,7 @@
           );
         }
         if (pubJwk && pubJwk.x) {
-          myKeyTag = pubJwk.x.substring(0, 4); // ใช้ 4 หลักแรกของ Key X เป็นตัวแยก Unique ID
-          document.getElementById('displayPubKey').textContent = `PubID: ${pubJwk.x.substring(0, 10)}...`;
+          myKeyTag = pubJwk.x.substring(0, 4);
         }
       } catch (err) {
         console.error("Error importing key:", err);
@@ -172,7 +176,7 @@
       renderFeed();
     }
 
-    // สร้างโพสต์ใหม่ พร้อม Digital Signature & Public Key Tag
+    // สร้างโพสต์ใหม่
     window.createPost = async function() {
       const textarea = document.getElementById('postText');
       const text = textarea.value.trim();
@@ -183,7 +187,7 @@
       const timestamp = Date.now();
       const pubJwk = JSON.parse(localStorage.getItem('pharmacy_pub_key'));
 
-      const payloadString = JSON.stringify({ id: postId, storeName, keyTag: myKeyTag, text, ts: timestamp });
+      const payloadString = JSON.stringify({ id: postId, storeName, username, keyTag: myKeyTag, text, ts: timestamp });
       
       let signatureBase64 = "";
       if (privateKeyObj) {
@@ -198,7 +202,8 @@
       const postMap = new Y.Map();
       postMap.set('id', postId);
       postMap.set('storeName', storeName);
-      postMap.set('keyTag', myKeyTag); // แนบ Fingerprint แยกเครื่อง
+      postMap.set('username', username);
+      postMap.set('keyTag', myKeyTag);
       postMap.set('text', text);
       postMap.set('ts', timestamp);
       postMap.set('publicKey', pubJwk);
@@ -209,7 +214,7 @@
       textarea.value = '';
     }
 
-    // วาดฟีดโพสต์ทั้งหมดออกหน้าจอ
+    // Render Posts
     function renderFeed() {
       const container = document.getElementById('postsFeed');
       const posts = yPostsArray.toArray();
@@ -227,7 +232,8 @@
       const sortedPosts = [...posts].sort((a, b) => b.get('ts') - a.get('ts'));
 
       container.innerHTML = sortedPosts.map(post => {
-        const pStoreName = post.get('storeName') || 'admin';
+        const pStoreName = post.get('storeName') || 'ร้านยาทั่วไป';
+        const pUsername = post.get('username') || 'admin';
         const pKeyTag = post.get('keyTag') || (post.get('publicKey')?.x ? post.get('publicKey').x.substring(0, 4) : '????');
         const pText = post.get('text') || '';
         const pTs = new Date(post.get('ts')).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
@@ -237,33 +243,43 @@
         return `
           <article class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md transition hover:border-slate-700">
             <div class="flex items-start justify-between mb-2">
-              <div class="flex items-center space-x-2.5">
-                <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-blue-400">
+              <div class="flex items-center space-x-3">
+                <!-- Avatar Icon -->
+                <div class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-blue-400 shrink-0">
                   ${letter}
                 </div>
+                
                 <div>
-                  <div class="flex items-center space-x-1.5">
-                    <span class="font-semibold text-sm text-slate-200">${escapeHtml(pStoreName)}</span>
-                    <span class="text-[11px] text-blue-400 font-mono bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20">#${pKeyTag}</span>
+                  <!-- ชื่อร้านค้า (ตัวหนา เด่นชัด) -->
+                  <div class="font-bold text-sm text-slate-100">${escapeHtml(pStoreName)}</div>
+                  
+                  <!-- Username + Unique Key ID + เวลาโพสต์ (บรรทัดใต้ชื่อร้าน) -->
+                  <div class="flex items-center space-x-1.5 text-xs text-slate-400 mt-0.5">
+                    <span class="text-slate-400 font-medium">@${escapeHtml(pUsername)}</span>
+                    <span class="text-[10px] text-blue-400 font-mono bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20">#${pKeyTag}</span>
+                    <span class="text-slate-600">•</span>
+                    <span class="text-[11px] text-slate-500">${pDate} ${pTs}</span>
                   </div>
-                  <div class="text-[10px] text-slate-500">${pDate} • ${pTs}</div>
                 </div>
               </div>
-              <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono">
-                ✓ Signed Node
+
+              <!-- Badge ยืนยัน Key -->
+              <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono shrink-0">
+                ✓ Verified
               </span>
             </div>
             
-            <p class="text-sm text-slate-300 my-3 whitespace-pre-line leading-relaxed">${escapeHtml(pText)}</p>
+            <!-- ข้อความโพสต์ -->
+            <p class="text-sm text-slate-300 my-3 whitespace-pre-line leading-relaxed pl-12">${escapeHtml(pText)}</p>
 
-            <div class="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs text-slate-500">
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs text-slate-500 pl-12">
               <button class="flex items-center space-x-1.5 hover:text-rose-400 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
                 <span>ถูกใจ</span>
               </button>
-              <span class="text-[10px] text-slate-600 font-mono">Yjs CRDT Item</span>
+              <span class="text-[10px] text-slate-600 font-mono">CRDT Signed Item</span>
             </div>
           </article>
         `;
