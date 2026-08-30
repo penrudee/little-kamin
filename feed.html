@@ -46,9 +46,9 @@
           <span id="avatarLetter">P</span>
         </div>
         <div>
-          <!-- ชื่อร้านค้า (หลัก) -->
-          <div class="font-bold text-white text-base" id="displayStoreName">กำลังโหลด...</div>
-          <!-- Username + Unique Key ID (ใต้ชื่อร้าน) -->
+          <!-- ชื่อร้านยา (ดึงจาก db.js settings -> pharmacy_name) -->
+          <div class="font-bold text-white text-base" id="displayStoreName">กำลังโหลดชื่อร้าน...</div>
+          <!-- Username + Unique Key ID (ใต้ชื่อร้านยา) -->
           <div class="flex items-center space-x-2 text-xs text-slate-400 mt-0.5">
             <span class="text-slate-300 font-medium" id="displayUsername">@user</span>
             <span class="text-[11px] text-blue-400 font-mono bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20" id="displayKeyTag">#----</span>
@@ -87,7 +87,10 @@
 
   </main>
 
-  <!-- ES Modules -->
+  <!-- นำเข้า db.js สำหรับเชื่อมต่อ IndexedDB local DB -->
+  <script src="db.js"></script>
+
+  <!-- ES Modules สำหรับ Yjs & WebSocket -->
   <script type="module">
     import * as Y from 'https://esm.sh/yjs@13.6.8';
     import { WebsocketProvider } from 'https://esm.sh/y-websocket@1.5.4';
@@ -100,26 +103,43 @@
     let yPostsArray = null;
     let privateKeyObj = null;
     let myKeyTag = '----';
+    
+    let pharmacyName = 'ร้านยาชุมชน';
+    let username = sessionStorage.getItem('active_username') || 'admin';
 
-    // ตรวจสอบการเข้าสู่ระบบ & ดึงข้อมูล
-    const storeName = sessionStorage.getItem('active_store_name') || 'ร้านยาชุมชน';
-    const username = sessionStorage.getItem('active_username') || 'admin';
-
-    if (!sessionStorage.getItem('is_authenticated')) {
-      window.location.href = 'zybook_login.html';
+    // โหลดข้อมูลชื่อร้านยาจาก IndexedDB (db.js)
+    async function loadPharmacySettings() {
+      try {
+        if (typeof dbEngine !== 'undefined') {
+          await dbEngine.init();
+          const settings = await dbEngine.getAll('settings');
+          const nameSetting = settings.find(s => s.key === 'pharmacy_name');
+          if (nameSetting && nameSetting.value) {
+            pharmacyName = nameSetting.value;
+          } else {
+            pharmacyName = sessionStorage.getItem('active_store_name') || 'ร้านยาชุมชน';
+          }
+        }
+      } catch (err) {
+        console.warn("ไม่สามารถอ่านชื่อร้านจาก IndexedDB ได้ ใช้ค่าสำรอง:", err);
+        pharmacyName = sessionStorage.getItem('active_store_name') || 'ร้านยาชุมชน';
+      }
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
-      // 1. โหลด Key และดึง Key Tag สั้นๆ ประจำเครื่อง
+      // 1. ดึงชื่อร้านยาจาก IndexedDB
+      await loadPharmacySettings();
+
+      // 2. โหลด Key และดึง Key Tag สั้นๆ ประจำเครื่อง
       await loadCryptoIdentity();
 
-      // 2. แสดงชื่อร้าน และ Username คู่กับ Unique Key Tag
-      document.getElementById('displayStoreName').textContent = storeName;
+      // 3. แสดงชื่อร้านยา และ Username คู่กับ Unique Key Tag บน UI
+      document.getElementById('displayStoreName').textContent = pharmacyName;
       document.getElementById('displayUsername').textContent = `@${username}`;
       document.getElementById('displayKeyTag').textContent = `#${myKeyTag}`;
-      document.getElementById('avatarLetter').textContent = storeName.charAt(0).toUpperCase();
+      document.getElementById('avatarLetter').textContent = pharmacyName.charAt(0).toUpperCase();
 
-      // 3. เริ่มเชื่อมต่อ Yjs
+      // 4. เริ่มเชื่อมต่อ Yjs Relay Server
       initYjsFeed();
     });
 
@@ -176,7 +196,7 @@
       renderFeed();
     }
 
-    // สร้างโพสต์ใหม่
+    // สร้างโพสต์ใหม่พร้อมแนบชื่อร้านยา
     window.createPost = async function() {
       const textarea = document.getElementById('postText');
       const text = textarea.value.trim();
@@ -187,7 +207,14 @@
       const timestamp = Date.now();
       const pubJwk = JSON.parse(localStorage.getItem('pharmacy_pub_key'));
 
-      const payloadString = JSON.stringify({ id: postId, storeName, username, keyTag: myKeyTag, text, ts: timestamp });
+      const payloadString = JSON.stringify({ 
+        id: postId, 
+        storeName: pharmacyName, 
+        username: username, 
+        keyTag: myKeyTag, 
+        text: text, 
+        ts: timestamp 
+      });
       
       let signatureBase64 = "";
       if (privateKeyObj) {
@@ -201,9 +228,9 @@
 
       const postMap = new Y.Map();
       postMap.set('id', postId);
-      postMap.set('storeName', storeName);
-      postMap.set('username', username);
-      postMap.set('keyTag', myKeyTag);
+      postMap.set('storeName', pharmacyName); // ชื่อร้านยาจาก IndexedDB
+      postMap.set('username', username);       // username ของผู้ใช้
+      postMap.set('keyTag', myKeyTag);         // Unique ID จาก ECDSA Public Key
       postMap.set('text', text);
       postMap.set('ts', timestamp);
       postMap.set('publicKey', pubJwk);
@@ -214,7 +241,7 @@
       textarea.value = '';
     }
 
-    // Render Posts
+    // แสดงรายการโพสต์บนหน้าจอ
     function renderFeed() {
       const container = document.getElementById('postsFeed');
       const posts = yPostsArray.toArray();
@@ -232,7 +259,7 @@
       const sortedPosts = [...posts].sort((a, b) => b.get('ts') - a.get('ts'));
 
       container.innerHTML = sortedPosts.map(post => {
-        const pStoreName = post.get('storeName') || 'ร้านยาทั่วไป';
+        const pStoreName = post.get('storeName') || 'ร้านยาชุมชน';
         const pUsername = post.get('username') || 'admin';
         const pKeyTag = post.get('keyTag') || (post.get('publicKey')?.x ? post.get('publicKey').x.substring(0, 4) : '????');
         const pText = post.get('text') || '';
@@ -244,16 +271,16 @@
           <article class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md transition hover:border-slate-700">
             <div class="flex items-start justify-between mb-2">
               <div class="flex items-center space-x-3">
-                <!-- Avatar Icon -->
+                <!-- Icon ร้านยา -->
                 <div class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-blue-400 shrink-0">
                   ${letter}
                 </div>
                 
                 <div>
-                  <!-- ชื่อร้านค้า (ตัวหนา เด่นชัด) -->
+                  <!-- ชื่อร้านยา (ตัวหนา เด่นชัด) -->
                   <div class="font-bold text-sm text-slate-100">${escapeHtml(pStoreName)}</div>
                   
-                  <!-- Username + Unique Key ID + เวลาโพสต์ (บรรทัดใต้ชื่อร้าน) -->
+                  <!-- Username + Unique Key ID + เวลาโพสต์ (ใต้ชื่อร้านยา) -->
                   <div class="flex items-center space-x-1.5 text-xs text-slate-400 mt-0.5">
                     <span class="text-slate-400 font-medium">@${escapeHtml(pUsername)}</span>
                     <span class="text-[10px] text-blue-400 font-mono bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20">#${pKeyTag}</span>
