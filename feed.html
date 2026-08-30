@@ -4,7 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pharmacy Feed - zybook.kaminpos.xyz</title>
-  
+
+  <!-- Auth Guard: ต้องอยู่บนสุดของ <head> ก่อนสคริปต์/สไตล์อื่นใด
+       เพื่อสกัดผู้ที่เข้าถึง feed.html ตรงๆ โดยยังไม่ผ่าน zybook_login.html
+       (ป้องกันทั้งการ render เนื้อหาก่อน redirect และการรันโค้ดอื่นๆ ที่ไม่ควรทำงาน) -->
+  <script>
+    if (sessionStorage.getItem('is_authenticated') !== 'true') {
+      window.location.replace('zybook_login.html');
+      // โยน error เพื่อหยุดการรันสคริปต์ที่เหลือใน head ทันที กัน race condition
+      // ระหว่างกำลัง redirect กับสคริปต์ตัวถัดไปที่โหลด/ทำงานต่อ
+      throw new Error('Not authenticated — redirecting to login');
+    }
+  </script>
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
