@@ -46,11 +46,14 @@
           <span id="avatarLetter">A</span>
         </div>
         <div>
-          <div class="font-bold text-white text-sm" id="displayStoreName">กำลังโหลด...</div>
-          <div class="text-xs text-slate-500 font-mono" id="displayPubKey">Identity Signed</div>
+          <div class="flex items-center space-x-2">
+            <span class="font-bold text-white text-sm" id="displayStoreName">กำลังโหลด...</span>
+            <span class="text-xs text-blue-400 font-mono bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20" id="displayKeyTag">#----</span>
+          </div>
+          <div class="text-[11px] text-slate-500 font-mono mt-0.5" id="displayPubKey">ECDSA Identity Active</div>
         </div>
       </div>
-      <span class="text-[10px] bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-full font-mono">P2P Node Active</span>
+      <span class="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full font-mono">Unique Key Verified</span>
     </div>
 
     <!-- Create Post Composer (Twitter-style) -->
@@ -59,7 +62,7 @@
         class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none transition"></textarea>
       
       <div class="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-3">
-        <span class="text-xs text-slate-500">🔒 เซ็นชื่อด้วย ECDSA KeyPair ในเครื่อง</span>
+        <span class="text-xs text-slate-500">🔒 เซ็นชื่อด้วย ECDSA KeyPair ประจำเครื่อง</span>
         <button id="postBtn" onclick="createPost()" disabled
           class="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-600/20 transition cursor-pointer disabled:cursor-not-allowed">
           โพสต์ข้อความ
@@ -75,7 +78,6 @@
 
     <!-- Posts Container -->
     <div id="postsFeed" class="space-y-4">
-      <!-- Loading State -->
       <div id="loadingFeed" class="text-center py-10 text-slate-500 text-xs">
         กำลังโหลดและซิงค์ข้อมูล CRDT...
       </div>
@@ -95,6 +97,7 @@
     let wsProvider = null;
     let yPostsArray = null;
     let privateKeyObj = null;
+    let myKeyTag = '----';
 
     // ตรวจสอบการเข้าสู่ระบบ
     const storeName = sessionStorage.getItem('active_store_name');
@@ -103,19 +106,20 @@
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
-      // 1. แสดงชื่อร้านค้า
-      document.getElementById('displayStoreName').textContent = storeName;
-      document.getElementById('avatarLetter').textContent = storeName.charAt(0).toUpperCase();
+      // 1. โหลด Key และดึง Key Tag สั้นๆ ประจำเครื่อง
+      await loadCryptoIdentity();
 
-      // 2. โหลด Private Key สำหรับ Sign
-      await loadPrivateKey();
+      // 2. แสดงชื่อร้านและ Tag ประจำเครื่อง
+      document.getElementById('displayStoreName').textContent = storeName;
+      document.getElementById('displayKeyTag').textContent = `#${myKeyTag}`;
+      document.getElementById('avatarLetter').textContent = storeName.charAt(0).toUpperCase();
 
       // 3. เริ่มเชื่อมต่อ Yjs
       initYjsFeed();
     });
 
-    // นำเข้า Private Key จาก localStorage
-    async function loadPrivateKey() {
+    // ดึง Public/Private Key และคำนวณ Fingerprint สั้นๆ
+    async function loadCryptoIdentity() {
       try {
         const privJwk = JSON.parse(localStorage.getItem('pharmacy_priv_key'));
         const pubJwk = JSON.parse(localStorage.getItem('pharmacy_pub_key'));
@@ -127,8 +131,9 @@
             false, ["sign"]
           );
         }
-        if (pubJwk) {
-          document.getElementById('displayPubKey').textContent = `ID: ${pubJwk.x.substring(0, 8)}...`;
+        if (pubJwk && pubJwk.x) {
+          myKeyTag = pubJwk.x.substring(0, 4); // ใช้ 4 หลักแรกของ Key X เป็นตัวแยก Unique ID
+          document.getElementById('displayPubKey').textContent = `PubID: ${pubJwk.x.substring(0, 10)}...`;
         }
       } catch (err) {
         console.error("Error importing key:", err);
@@ -144,7 +149,6 @@
       ydoc = new Y.Doc();
       wsProvider = new WebsocketProvider(RELAY_WS_URL, ROOM_NAME, ydoc);
       
-      // ดึง Y.Array ของโพสต์
       yPostsArray = ydoc.getArray('posts');
 
       wsProvider.on('status', event => {
@@ -161,16 +165,14 @@
         }
       });
 
-      // สังเกตการณ์เปลี่ยนแปลงของข้อมูล (Observer)
       yPostsArray.observe(() => {
         renderFeed();
       });
 
-      // Render ครั้งแรก
       renderFeed();
     }
 
-    // สร้างโพสต์ใหม่ พร้อม Digital Signature
+    // สร้างโพสต์ใหม่ พร้อม Digital Signature & Public Key Tag
     window.createPost = async function() {
       const textarea = document.getElementById('postText');
       const text = textarea.value.trim();
@@ -181,10 +183,8 @@
       const timestamp = Date.now();
       const pubJwk = JSON.parse(localStorage.getItem('pharmacy_pub_key'));
 
-      // Payload ที่จะเซ็น
-      const payloadString = JSON.stringify({ id: postId, storeName, text, ts: timestamp });
+      const payloadString = JSON.stringify({ id: postId, storeName, keyTag: myKeyTag, text, ts: timestamp });
       
-      // Sign ด้วย ECDSA
       let signatureBase64 = "";
       if (privateKeyObj) {
         const sigBuffer = await window.crypto.subtle.sign(
@@ -195,17 +195,15 @@
         signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(sigBuffer)));
       }
 
-      // สร้าง Y.Map สำหรับโพสต์นี้
       const postMap = new Y.Map();
       postMap.set('id', postId);
       postMap.set('storeName', storeName);
+      postMap.set('keyTag', myKeyTag); // แนบ Fingerprint แยกเครื่อง
       postMap.set('text', text);
       postMap.set('ts', timestamp);
       postMap.set('publicKey', pubJwk);
       postMap.set('signature', signatureBase64);
-      postMap.set('likes', new Y.Map());
 
-      // เพิ่มลง Y.Array
       yPostsArray.push([postMap]);
 
       textarea.value = '';
@@ -226,11 +224,11 @@
         return;
       }
 
-      // เรียงจากใหม่ไปเก่า (Descending)
       const sortedPosts = [...posts].sort((a, b) => b.get('ts') - a.get('ts'));
 
       container.innerHTML = sortedPosts.map(post => {
-        const pStoreName = post.get('storeName') || 'ไม่ระบุชื่อ';
+        const pStoreName = post.get('storeName') || 'admin';
+        const pKeyTag = post.get('keyTag') || (post.get('publicKey')?.x ? post.get('publicKey').x.substring(0, 4) : '????');
         const pText = post.get('text') || '';
         const pTs = new Date(post.get('ts')).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
         const pDate = new Date(post.get('ts')).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
@@ -244,12 +242,15 @@
                   ${letter}
                 </div>
                 <div>
-                  <div class="font-semibold text-sm text-slate-200">${escapeHtml(pStoreName)}</div>
+                  <div class="flex items-center space-x-1.5">
+                    <span class="font-semibold text-sm text-slate-200">${escapeHtml(pStoreName)}</span>
+                    <span class="text-[11px] text-blue-400 font-mono bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20">#${pKeyTag}</span>
+                  </div>
                   <div class="text-[10px] text-slate-500">${pDate} • ${pTs}</div>
                 </div>
               </div>
               <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono">
-                ✓ Verified Key
+                ✓ Signed Node
               </span>
             </div>
             
@@ -262,7 +263,7 @@
                 </svg>
                 <span>ถูกใจ</span>
               </button>
-              <span class="text-[10px] text-slate-600 font-mono">CRDT Item</span>
+              <span class="text-[10px] text-slate-600 font-mono">Yjs CRDT Item</span>
             </div>
           </article>
         `;
