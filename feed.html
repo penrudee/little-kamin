@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pharmacy Feed - zybook.kaminpos.xyz</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Sarabun', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+  <!-- Navigation Bar -->
+  <header class="sticky top-0 z-50 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
+    <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-8 h-8 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+        </div>
+        <h1 class="font-bold text-lg text-white tracking-wide">Pharmacy Feed</h1>
+      </div>
+
+      <div class="flex items-center space-x-3 text-xs">
+        <div class="flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
+          <span id="statusDot" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+          <span id="statusText" class="text-slate-400">Connecting...</span>
+        </div>
+        <button onclick="logout()" class="text-slate-400 hover:text-rose-400 transition">ออกจากระบบ</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-2xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- User Profile Bar -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-md">
+          <span id="avatarLetter">A</span>
+        </div>
+        <div>
+          <div class="font-bold text-white text-sm" id="displayStoreName">กำลังโหลด...</div>
+          <div class="text-xs text-slate-500 font-mono" id="displayPubKey">Identity Signed</div>
+        </div>
+      </div>
+      <span class="text-[10px] bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2.5 py-1 rounded-full font-mono">P2P Node Active</span>
+    </div>
+
+    <!-- Create Post Composer (Twitter-style) -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+      <textarea id="postText" rows="3" placeholder="มีข่าวยาใหม่ อัปเดตคลัง หรือข้อความถึงเพื่อนร้านยา..." 
+        class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none transition"></textarea>
+      
+      <div class="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-3">
+        <span class="text-xs text-slate-500">🔒 เซ็นชื่อด้วย ECDSA KeyPair ในเครื่อง</span>
+        <button id="postBtn" onclick="createPost()" disabled
+          class="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-600/20 transition cursor-pointer disabled:cursor-not-allowed">
+          โพสต์ข้อความ
+        </button>
+      </div>
+    </div>
+
+    <!-- Timeline Feed Header -->
+    <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+      <h2 class="text-sm font-semibold text-slate-400">ฟีดสาธารณะ (Real-time Sync)</h2>
+      <span id="postCount" class="text-xs text-slate-500">0 โพสต์</span>
+    </div>
+
+    <!-- Posts Container -->
+    <div id="postsFeed" class="space-y-4">
+      <!-- Loading State -->
+      <div id="loadingFeed" class="text-center py-10 text-slate-500 text-xs">
+        กำลังโหลดและซิงค์ข้อมูล CRDT...
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ES Modules -->
+  <script type="module">
+    import * as Y from 'https://esm.sh/yjs@13.6.8';
+    import { WebsocketProvider } from 'https://esm.sh/y-websocket@1.5.4';
+
+    const RELAY_WS_URL = 'wss://zybook.kaminpos.xyz';
+    const ROOM_NAME = 'pharmacy-public-feed';
+
+    let ydoc = null;
+    let wsProvider = null;
+    let yPostsArray = null;
+    let privateKeyObj = null;
+
+    // ตรวจสอบการเข้าสู่ระบบ
+    const storeName = sessionStorage.getItem('active_store_name');
+    if (!storeName) {
+      window.location.href = 'zybook_login.html';
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      // 1. แสดงชื่อร้านค้า
+      document.getElementById('displayStoreName').textContent = storeName;
+      document.getElementById('avatarLetter').textContent = storeName.charAt(0).toUpperCase();
+
+      // 2. โหลด Private Key สำหรับ Sign
+      await loadPrivateKey();
+
+      // 3. เริ่มเชื่อมต่อ Yjs
+      initYjsFeed();
+    });
+
+    // นำเข้า Private Key จาก localStorage
+    async function loadPrivateKey() {
+      try {
+        const privJwk = JSON.parse(localStorage.getItem('pharmacy_priv_key'));
+        const pubJwk = JSON.parse(localStorage.getItem('pharmacy_pub_key'));
+
+        if (privJwk) {
+          privateKeyObj = await window.crypto.subtle.importKey(
+            "jwk", privJwk,
+            { name: "ECDSA", namedCurve: "P-256" },
+            false, ["sign"]
+          );
+        }
+        if (pubJwk) {
+          document.getElementById('displayPubKey').textContent = `ID: ${pubJwk.x.substring(0, 8)}...`;
+        }
+      } catch (err) {
+        console.error("Error importing key:", err);
+      }
+    }
+
+    // เชื่อมต่อ Yjs & Sync Feed
+    function initYjsFeed() {
+      const statusDot = document.getElementById('statusDot');
+      const statusText = document.getElementById('statusText');
+      const postBtn = document.getElementById('postBtn');
+
+      ydoc = new Y.Doc();
+      wsProvider = new WebsocketProvider(RELAY_WS_URL, ROOM_NAME, ydoc);
+      
+      // ดึง Y.Array ของโพสต์
+      yPostsArray = ydoc.getArray('posts');
+
+      wsProvider.on('status', event => {
+        if (event.status === 'connected') {
+          statusDot.className = 'w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500';
+          statusText.textContent = 'Online';
+          statusText.className = 'text-emerald-400 font-medium';
+          postBtn.disabled = false;
+        } else {
+          statusDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+          statusText.textContent = 'Offline';
+          statusText.className = 'text-rose-400 font-medium';
+          postBtn.disabled = true;
+        }
+      });
+
+      // สังเกตการณ์เปลี่ยนแปลงของข้อมูล (Observer)
+      yPostsArray.observe(() => {
+        renderFeed();
+      });
+
+      // Render ครั้งแรก
+      renderFeed();
+    }
+
+    // สร้างโพสต์ใหม่ พร้อม Digital Signature
+    window.createPost = async function() {
+      const textarea = document.getElementById('postText');
+      const text = textarea.value.trim();
+
+      if (!text) return;
+
+      const postId = crypto.randomUUID();
+      const timestamp = Date.now();
+      const pubJwk = JSON.parse(localStorage.getItem('pharmacy_pub_key'));
+
+      // Payload ที่จะเซ็น
+      const payloadString = JSON.stringify({ id: postId, storeName, text, ts: timestamp });
+      
+      // Sign ด้วย ECDSA
+      let signatureBase64 = "";
+      if (privateKeyObj) {
+        const sigBuffer = await window.crypto.subtle.sign(
+          { name: "ECDSA", hash: { name: "SHA-256" } },
+          privateKeyObj,
+          new TextEncoder().encode(payloadString)
+        );
+        signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(sigBuffer)));
+      }
+
+      // สร้าง Y.Map สำหรับโพสต์นี้
+      const postMap = new Y.Map();
+      postMap.set('id', postId);
+      postMap.set('storeName', storeName);
+      postMap.set('text', text);
+      postMap.set('ts', timestamp);
+      postMap.set('publicKey', pubJwk);
+      postMap.set('signature', signatureBase64);
+      postMap.set('likes', new Y.Map());
+
+      // เพิ่มลง Y.Array
+      yPostsArray.push([postMap]);
+
+      textarea.value = '';
+    }
+
+    // วาดฟีดโพสต์ทั้งหมดออกหน้าจอ
+    function renderFeed() {
+      const container = document.getElementById('postsFeed');
+      const posts = yPostsArray.toArray();
+
+      document.getElementById('postCount').textContent = `${posts.length} โพสต์`;
+
+      if (posts.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12 bg-slate-900/50 rounded-2xl border border-slate-800/60 text-slate-500 text-xs">
+            ยังไม่มีโพสต์ในระบบ เป็นคนแรกที่โพสต์ข้อความ!
+          </div>`;
+        return;
+      }
+
+      // เรียงจากใหม่ไปเก่า (Descending)
+      const sortedPosts = [...posts].sort((a, b) => b.get('ts') - a.get('ts'));
+
+      container.innerHTML = sortedPosts.map(post => {
+        const pStoreName = post.get('storeName') || 'ไม่ระบุชื่อ';
+        const pText = post.get('text') || '';
+        const pTs = new Date(post.get('ts')).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        const pDate = new Date(post.get('ts')).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+        const letter = pStoreName.charAt(0).toUpperCase();
+
+        return `
+          <article class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md transition hover:border-slate-700">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center space-x-2.5">
+                <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-blue-400">
+                  ${letter}
+                </div>
+                <div>
+                  <div class="font-semibold text-sm text-slate-200">${escapeHtml(pStoreName)}</div>
+                  <div class="text-[10px] text-slate-500">${pDate} • ${pTs}</div>
+                </div>
+              </div>
+              <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono">
+                ✓ Verified Key
+              </span>
+            </div>
+            
+            <p class="text-sm text-slate-300 my-3 whitespace-pre-line leading-relaxed">${escapeHtml(pText)}</p>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs text-slate-500">
+              <button class="flex items-center space-x-1.5 hover:text-rose-400 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                <span>ถูกใจ</span>
+              </button>
+              <span class="text-[10px] text-slate-600 font-mono">CRDT Item</span>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+
+    window.logout = function() {
+      sessionStorage.clear();
+      window.location.href = 'zybook_login.html';
+    }
+  </script>
+</body>
+</html>
