@@ -135,7 +135,7 @@
       ydoc = new Y.Doc();
 
       // เชื่อมต่อผ่าน y-websocket provider
-      wsProvider = new Y WebsocketProvider(RELAY_WS_URL, ROOM_NAME, ydoc);
+      wsProvider = new Y.WebsocketProvider(RELAY_WS_URL, ROOM_NAME, ydoc);
 
       wsProvider.on('status', event => {
         if (event.status === 'connected') {
