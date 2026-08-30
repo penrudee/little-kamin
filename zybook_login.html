@@ -173,24 +173,7 @@
             });
         }
 
-        // 3. ฟังก์ชันการ Login
-        async function handleLogin(event) {
-            event.preventDefault();
-
-            const storeName = document.getElementById('storeName').value.trim();
-            const storePassword = document.getElementById('storePassword').value;
-
-            if (!storeName || !storePassword) {
-                alert('กรุณากรอกข้อมูลให้ครบถ้วน');
-                return;
-            }
-
-            sessionStorage.setItem('active_store_name', storeName);
-            sessionStorage.setItem('is_authenticated', 'true');
-
-            alert(`เข้าสู่ระบบสำเร็จในชื่อ: ${storeName}\nพร้อมรัน Local-First CRDT Feed`);
-        }
-        // ส่งไปหน้า feed
+        
         async function handleLogin(event) {
             event.preventDefault();
 
