@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>น้องคามิน - จุดลงทะเบียนคนไข้อัตโนมัติ</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+<style>
+  html, body { height: 100%; background: linear-gradient(180deg,#eef4ff 0%, #f7faff 100%); }
+  .kiosk-wrap { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+  #robotStage { width: 220px; height: 220px; margin: 0 auto; }
+  .robot-name { text-align:center; font-weight:700; color:#2b5fd9; letter-spacing:.5px; }
+  .status-pill { text-align:center; font-size: .85rem; color:#6c757d; margin-bottom:6px; }
+  .chat-log { flex: 1; overflow-y: auto; padding: 8px 4px; }
+  .bubble-bot { background:#fff; border:1px solid #e3e9f5; border-radius: 16px 16px 16px 4px; padding:10px 14px; max-width: 85%; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .bubble-user { background:#2b5fd9; color:#fff; border-radius: 16px 16px 4px 16px; padding:10px 14px; max-width: 85%; margin-left:auto; }
+  .row-bot { display:flex; margin-bottom:10px; }
+  .row-user { display:flex; margin-bottom:10px; }
+  .answer-panel { background:#fff; border-top: 1px solid #e3e9f5; padding: 12px; position: sticky; bottom: 0; }
+  .mic-btn.listening { animation: pulseMic 1s infinite; background:#dc3545 !important; border-color:#dc3545 !important; }
+  @keyframes pulseMic { 0%{box-shadow:0 0 0 0 rgba(220,53,69,.5);} 70%{box-shadow:0 0 0 14px rgba(220,53,69,0);} 100%{box-shadow:0 0 0 0 rgba(220,53,69,0);} }
+  #camPreview, #camCanvas { width: 100%; max-width: 320px; border-radius: 12px; background:#000; }
+  #photoThumb { width: 110px; height: 110px; object-fit: cover; border-radius: 50%; border: 3px solid #2b5fd9; }
+  .summary-row { display:flex; justify-content: space-between; border-bottom: 1px dashed #e3e9f5; padding: 6px 0; }
+  .summary-row .lbl { color:#6c757d; font-size:.85rem; }
+  .summary-row .val { font-weight:600; text-align:right; }
+  .edit-link { font-size:.75rem; }
+</style>
+</head>
+<body>
+<div class="kiosk-wrap">
+
+  <div class="text-center pt-3 pb-1">
+    <div id="robotStage"></div>
+    <div class="robot-name">🤖 น้องคามิน</div>
+    <div class="status-pill" id="statusPill">กำลังเชื่อมต่อกับร้านยา...</div>
+  </div>
+
+  <div id="connectError" class="alert alert-danger text-center mx-3 d-none"></div>
+
+  <div id="chatLog" class="chat-log px-3 d-none"></div>
+
+  <!-- Answer panel: text/number step -->
+  <div id="answerPanel" class="answer-panel d-none">
+    <div class="d-flex gap-2 mb-2">
+      <input type="text" id="answerInput" class="form-control" placeholder="พิมพ์คำตอบที่นี่ หรือกดไมค์เพื่อพูด...">
+      <button class="btn btn-outline-primary mic-btn" id="micBtn" title="พูดคำตอบ">🎤</button>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary d-none" id="skipBtn">ข้ามข้อนี้</button>
+      <button class="btn btn-primary w-100" id="nextBtn">ถัดไป ➜</button>
+    </div>
+  </div>
+
+  <!-- Answer panel: photo step -->
+  <div id="photoPanel" class="answer-panel d-none text-center">
+    <video id="camPreview" autoplay playsinline class="d-none mb-2"></video>
+    <canvas id="camCanvas" class="d-none"></canvas>
+    <img id="photoThumb" class="d-none mb-2" alt="รูปถ่าย">
+    <div class="d-flex flex-column gap-2">
+      <button class="btn btn-primary" id="openCamBtn">📷 เปิดกล้องถ่ายภาพหน้า</button>
+      <button class="btn btn-success d-none" id="shootBtn">📸 ถ่ายภาพ</button>
+      <div class="d-flex gap-2 d-none" id="photoConfirmRow">
+        <button class="btn btn-outline-secondary w-100" id="retakeBtn">ถ่ายใหม่</button>
+        <button class="btn btn-primary w-100" id="usePhotoBtn">ใช้ภาพนี้ ➜</button>
+      </div>
+      <button class="btn btn-link text-muted" id="skipPhotoBtn">ข้ามขั้นตอนนี้</button>
+    </div>
+  </div>
+
+  <!-- Confirm / summary panel -->
+  <div id="confirmPanel" class="answer-panel d-none">
+    <h6 class="fw-bold mb-2">📋 ตรวจสอบข้อมูลก่อนลงทะเบียน</h6>
+    <div id="summaryBox" class="mb-3"></div>
+    <button class="btn btn-success w-100 btn-lg" id="submitBtn">✅ ยืนยันและลงทะเบียน</button>
+  </div>
+
+  <!-- Success panel -->
+  <div id="successPanel" class="answer-panel d-none text-center">
+    <div class="fs-1 mb-1">🎉</div>
+    <h5 class="fw-bold text-success">ลงทะเบียนสำเร็จ!</h5>
+    <div>รหัสประจำตัวคนไข้ของคุณคือ</div>
+    <div class="fs-4 fw-bold text-primary mb-2" id="successCode">-</div>
+    <div id="successQr" class="d-flex justify-content-center mb-2"></div>
+    <div class="text-muted small mb-2">สแกน QR นี้เก็บไว้เพื่อดูประวัติการรับยาในอนาคตได้ค่ะ</div>
+    <div class="text-muted small" id="resetCountdown"></div>
+  </div>
+
+</div>
+
+<script>
+/* ========================= ROBOT (Lottie) ========================= */
+let robotAnim = null;
+const SEGMENTS = { idle: [0, 30], speaking: [30, 60], listening: [60, 90] };
+
+function buildRobotAnimation() {
+  const hold = (t, s) => ({ t, s: Array.isArray(s) ? s : [s], h: 1 });
+  return {
+    v: "5.9.0", fr: 30, ip: 0, op: 91, w: 300, h: 300, nm: "robot", ddd: 0, assets: [],
+    layers: [
+      { ddd:0, ind:1, ty:4, nm:"ring", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
+        ks: {
+          o: { a:1, k:[ hold(0,0), hold(60,70), hold(72,100), hold(84,70), hold(90,70) ] },
+          r: { a:0, k:0 }, p: { a:0, k:[150,150,0] }, a: { a:0, k:[0,0,0] },
+          s: { a:1, k:[ hold(0,[100,100,100]), hold(60,[100,100,100]), hold(75,[112,112,100]), hold(90,[100,100,100]) ] }
+        },
+        shapes: [ { ty:"gr", nm:"ringGroup", it:[
+          { ty:"el", p:{a:0,k:[0,0]}, s:{a:0,k:[260,260]}, nm:"ringPath" },
+          { ty:"st", c:{a:0,k:[0.30,0.55,0.97,1]}, o:{a:0,k:100}, w:{a:0,k:6}, lc:2, lj:2, nm:"ringStroke" },
+          { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
+        ] } ]
+      },
+      { ddd:0, ind:2, ty:4, nm:"head", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
+        ks: { o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[150,155,0]}, a:{a:0,k:[0,0,0]}, s:{a:0,k:[100,100,100]} },
+        shapes: [ { ty:"gr", nm:"headGroup", it:[
+          { ty:"rc", p:{a:0,k:[0,0]}, s:{a:0,k:[190,170]}, r:{a:0,k:40}, nm:"headPath" },
+          { ty:"fl", c:{a:0,k:[0.34,0.60,0.98,1]}, o:{a:0,k:100}, nm:"headFill" },
+          { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
+        ] } ]
+      },
+      { ddd:0, ind:3, ty:4, nm:"antennaStem", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
+        ks: { o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[150,75,0]}, a:{a:0,k:[0,0,0]}, s:{a:0,k:[100,100,100]} },
+        shapes:[ { ty:"gr", nm:"stemGroup", it:[
+          { ty:"rc", p:{a:0,k:[0,0]}, s:{a:0,k:[6,30]}, r:{a:0,k:3}, nm:"stemPath" },
+          { ty:"fl", c:{a:0,k:[0.4,0.45,0.5,1]}, o:{a:0,k:100}, nm:"stemFill" },
+          { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
+        ] } ]
+      },
+      { ddd:0, ind:4, ty:4, nm:"antennaBall", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
+        ks: {
+          o:{ a:1, k:[ hold(0,70), hold(10,100), hold(20,70), hold(30,70), hold(34,100), hold(38,60), hold(42,100), hold(46,60), hold(50,100), hold(54,60), hold(60,70), hold(90,70) ] },
+          r:{a:0,k:0}, p:{a:0,k:[150,58,0]}, a:{a:0,k:[0,0,0]}, s:{a:0,k:[100,100,100]}
+        },
+        shapes:[ { ty:"gr", nm:"ballGroup", it:[
+          { ty:"el", p:{a:0,k:[0,0]}, s:{a:0,k:[20,20]}, nm:"ballPath" },
+          { ty:"fl", c:{a:0,k:[1,0.6,0.2,1]}, o:{a:0,k:100}, nm:"ballFill" },
+          { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
+        ] } ]
+      },
+      { ddd:0, ind:5, ty:4, nm:"eyeL", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
+        ks: {
+          o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[112,145,0]}, a:{a:0,k:[0,0,0]},
+          s:{ a:1, k:[ hold(0,[100,100,100]), hold(14,[100,100,100]), hold(15,[100,15,100]), hold(16,[100,100,100]), hold(90,[100,100,100]) ] }
+        },
+        shapes:[ { ty:"gr", nm:"eyeLGroup", it:[
+          { ty:"el", p:{a:0,k:[0,0]}, s:{a:0,k:[26,26]}, nm:"eyeLPath" },
+          { ty:"fl", c:{a:0,k:[0.10,0.14,0.20,1]}, o:{a:0,k:100}, nm:"eyeLFill" },
+          { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
+        ] } ]
+      },
+      { ddd:0, ind:6, ty:4, nm:"eyeR", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
+        ks: {
+          o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[188,145,0]}, a:{a:0,k:[0,0,0]},
+          s:{ a:1, k:[ hold(0,[100,100,100]), hold(14,[100,100,100]), hold(15,[100,15,100]), hold(16,[100,100,100]), hold(90,[100,100,100]) ] }
+        },
+        shapes:[ { ty:"gr", nm:"eyeRGroup", it:[
+          { ty:"el", p:{a:0,k:[0,0]}, s:{a:0,k:[26,26]}, nm:"eyeRPath" },
+          { ty:"fl", c:{a:0,k:[0.10,0.14,0.20,1]}, o:{a:0,k:100}, nm:"eyeRFill" },
+          { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
+        ] } ]
+      },
+      { ddd:0, ind:7, ty:4, nm:"mouth", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
+        ks: {
+          o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[150,195,0]}, a:{a:0,k:[0,0,0]},
+          s:{ a:1, k:[
+            hold(0,[100,40,100]), hold(30,[100,40,100]),
+            hold(34,[100,130,100]), hold(38,[100,55,100]),
+            hold(42,[100,140,100]), hold(46,[100,50,100]),
+            hold(50,[100,120,100]), hold(54,[100,45,100]),
+            hold(60,[100,40,100]), hold(90,[100,40,100])
+          ] }
+        },
+        shapes:[ { ty:"gr", nm:"mouthGroup", it:[
+          { ty:"rc", p:{a:0,k:[0,0]}, s:{a:0,k:[60,20]}, r:{a:0,k:10}, nm:"mouthPath" },
+          { ty:"fl", c:{a:0,k:[0.10,0.14,0.20,1]}, o:{a:0,k:100}, nm:"mouthFill" },
+          { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
+        ] } ]
+      }
+    ]
+  };
+}
+
+function initRobot() {
+  robotAnim = lottie.loadAnimation({
+    container: document.getElementById("robotStage"),
+    renderer: "svg",
+    loop: true,
+    autoplay: true,
+    animationData: buildRobotAnimation()
+  });
+  robotAnim.addEventListener("DOMLoaded", () => setRobotState("idle"));
+}
+
+function setRobotState(state) {
+  if (!robotAnim) return;
+  const seg = SEGMENTS[state] || SEGMENTS.idle;
+  robotAnim.playSegments(seg, true);
+}
+
+/* ========================= SPEECH ========================= */
+const synth = window.speechSynthesis;
+function speak(text) {
+  return new Promise((resolve) => {
+    setRobotState("speaking");
+    if (!synth) { setTimeout(() => { setRobotState("idle"); resolve(); }, 900); return; }
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "th-TH";
+    u.rate = 0.98;
+    u.pitch = 1.05;
+    const done = () => { setRobotState("idle"); resolve(); };
+    u.onend = done;
+    u.onerror = done;
+    synth.speak(u);
+  });
+}
+
+const SRClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isListening = false;
+if (SRClass) {
+  recognition = new SRClass();
+  recognition.lang = "th-TH";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+}
+
+function toggleListening() {
+  const micBtn = document.getElementById("micBtn");
+  if (!recognition) {
+    alert("อุปกรณ์นี้ไม่รองรับการพูดคำตอบ กรุณาพิมพ์คำตอบแทนค่ะ");
+    return;
+  }
+  if (isListening) {
+    try { recognition.stop(); } catch (e) {}
+    return;
+  }
+  isListening = true;
+  micBtn.classList.add("listening");
+  setRobotState("listening");
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    document.getElementById("answerInput").value = text;
+  };
+  recognition.onerror = () => {};
+  recognition.onend = () => {
+    isListening = false;
+    micBtn.classList.remove("listening");
+    setRobotState("idle");
+  };
+  try { recognition.start(); } catch (e) { isListening = false; micBtn.classList.remove("listening"); setRobotState("idle"); }
+}
+
+/* ========================= CHAT LOG ========================= */
+function addBotBubble(text) {
+  const log = document.getElementById("chatLog");
+  log.classList.remove("d-none");
+  const row = document.createElement("div");
+  row.className = "row-bot";
+  row.innerHTML = `<div class="bubble-bot">${escapeHtml(text)}</div>`;
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+function addUserBubble(text) {
+  const log = document.getElementById("chatLog");
+  const row = document.createElement("div");
+  row.className = "row-user";
+  row.innerHTML = `<div class="bubble-user">${escapeHtml(text)}</div>`;
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.innerText = str == null ? "" : String(str);
+  return div.innerHTML;
+}
+
+/* ========================= CONVERSATION FLOW ========================= */
+const answers = { full_name: "", age: "", weight: "", phone: "", allergies: "", chronic_conditions: "", photo: "" };
+
+const STEPS = [
+  { field: "full_name", q: "สวัสดีค่ะ ดิฉันชื่อน้องคามิน ผู้ช่วยลงทะเบียนคนไข้ของร้านค่ะ ขอทราบชื่อ-นามสกุลของคุณค่ะ", type: "text", required: true },
+  { field: "age", q: "คุณอายุกี่ปีคะ", type: "text", required: true },
+  { field: "weight", q: "น้ำหนักตัวโดยประมาณกี่กิโลกรัมคะ ถ้าไม่สะดวกตอบ กดข้ามได้ค่ะ", type: "text", required: false },
+  { field: "phone", q: "ขอเบอร์โทรศัพท์ไว้ติดต่อและเก็บประวัติค่ะ ถ้าไม่สะดวก กดข้ามได้ค่ะ", type: "text", required: false },
+  { field: "allergies", q: "คุณมีประวัติแพ้ยา หรือแพ้อาหารชนิดใดหรือไม่คะ ถ้าไม่มี ตอบว่า 'ไม่มี' ได้เลยค่ะ", type: "text", required: true },
+  { field: "chronic_conditions", q: "คุณมีโรคประจำตัวหรือไม่คะ เช่น เบาหวาน ความดันโลหิตสูง หอบหืด ถ้าไม่มี ตอบว่า 'ไม่มี' ค่ะ", type: "text", required: true },
+  { field: "photo", q: "สุดท้ายนี้ ขอถ่ายภาพใบหน้าของคุณเก็บไว้ในประวัติคนไข้ด้วยค่ะ", type: "photo", required: false }
+];
+
+let stepIndex = 0;
+let stream = null;
+
+async function startFlow() {
+  document.getElementById("statusPill").innerText = "พร้อมให้บริการ";
+  stepIndex = 0;
+  await runStep();
+}
+
+async function runStep() {
+  if (stepIndex >= STEPS.length) {
+    showConfirmPanel();
+    return;
+  }
+  const step = STEPS[stepIndex];
+  hideAllPanels();
+  addBotBubble(step.q);
+  await speak(step.q);
+
+  if (step.type === "photo") {
+    showPhotoPanel();
+  } else {
+    showAnswerPanel(step);
+  }
+}
+
+function hideAllPanels() {
+  document.getElementById("answerPanel").classList.add("d-none");
+  document.getElementById("photoPanel").classList.add("d-none");
+  document.getElementById("confirmPanel").classList.add("d-none");
+  document.getElementById("successPanel").classList.add("d-none");
+}
+
+function showAnswerPanel(step) {
+  const panel = document.getElementById("answerPanel");
+  const input = document.getElementById("answerInput");
+  const skipBtn = document.getElementById("skipBtn");
+  input.value = "";
+  input.type = "text";
+  input.placeholder = step.required ? "พิมพ์คำตอบที่นี่ หรือกดไมค์เพื่อพูด..." : "พิมพ์คำตอบ หรือกดข้ามข้อนี้...";
+  skipBtn.classList.toggle("d-none", step.required);
+  panel.classList.remove("d-none");
+  input.focus();
+}
+
+function showPhotoPanel() {
+  document.getElementById("photoPanel").classList.remove("d-none");
+  document.getElementById("camPreview").classList.add("d-none");
+  document.getElementById("camCanvas").classList.add("d-none");
+  document.getElementById("photoThumb").classList.add("d-none");
+  document.getElementById("photoConfirmRow").classList.add("d-none");
+  document.getElementById("openCamBtn").classList.remove("d-none");
+  document.getElementById("shootBtn").classList.add("d-none");
+}
+
+document.getElementById("nextBtn").addEventListener("click", () => {
+  const step = STEPS[stepIndex];
+  const val = document.getElementById("answerInput").value.trim();
+  if (step.required && !val) {
+    alert("กรุณาตอบคำถามนี้ก่อนไปข้อถัดไปค่ะ");
+    return;
+  }
+  answers[step.field] = val;
+  if (val) addUserBubble(val);
+  stepIndex++;
+  runStep();
+});
+
+document.getElementById("skipBtn").addEventListener("click", () => {
+  const step = STEPS[stepIndex];
+  answers[step.field] = "";
+  addUserBubble("(ข้ามข้อนี้)");
+  stepIndex++;
+  runStep();
+});
+
+document.getElementById("answerInput").addEventListener("keypress", (e) => {
+  if (e.key === "Enter") document.getElementById("nextBtn").click();
+});
+
+document.getElementById("micBtn").addEventListener("click", toggleListening);
+
+/* ---- photo step handlers ---- */
+document.getElementById("openCamBtn").addEventListener("click", async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+    const video = document.getElementById("camPreview");
+    video.srcObject = stream;
+    video.classList.remove("d-none");
+    document.getElementById("openCamBtn").classList.add("d-none");
+    document.getElementById("shootBtn").classList.remove("d-none");
+  } catch (e) {
+    alert("ไม่สามารถเข้าถึงกล้องได้ กรุณาอนุญาตการใช้กล้อง หรือกดข้ามขั้นตอนนี้ค่ะ");
+  }
+});
+
+document.getElementById("shootBtn").addEventListener("click", () => {
+  const video = document.getElementById("camPreview");
+  const canvas = document.getElementById("camCanvas");
+  const size = 320;
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const side = Math.min(vw, vh);
+  ctx.drawImage(video, (vw - side) / 2, (vh - side) / 2, side, side, 0, 0, size, size);
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+  document.getElementById("photoThumb").src = dataUrl;
+  document.getElementById("photoThumb").classList.remove("d-none");
+  document.getElementById("photoThumb").dataset.value = dataUrl;
+  video.classList.add("d-none");
+  document.getElementById("shootBtn").classList.add("d-none");
+  document.getElementById("photoConfirmRow").classList.remove("d-none");
+  stopCamStream();
+});
+
+document.getElementById("retakeBtn").addEventListener("click", async () => {
+  document.getElementById("photoThumb").classList.add("d-none");
+  document.getElementById("photoConfirmRow").classList.add("d-none");
+  document.getElementById("openCamBtn").click();
+});
+
+document.getElementById("usePhotoBtn").addEventListener("click", () => {
+  answers.photo = document.getElementById("photoThumb").dataset.value || "";
+  addUserBubble("(แนบรูปภาพใบหน้าแล้ว)");
+  stepIndex++;
+  runStep();
+});
+
+document.getElementById("skipPhotoBtn").addEventListener("click", () => {
+  stopCamStream();
+  answers.photo = "";
+  addUserBubble("(ข้ามการถ่ายภาพ)");
+  stepIndex++;
+  runStep();
+});
+
+function stopCamStream() {
+  if (stream) {
+    stream.getTracks().forEach((t) => t.stop());
+    stream = null;
+  }
+}
+
+/* ---- confirm / submit ---- */
+function showConfirmPanel() {
+  hideAllPanels();
+  const box = document.getElementById("summaryBox");
+  const rows = [
+    ["ชื่อ-นามสกุล", answers.full_name || "-"],
+    ["อายุ", (answers.age || "-") + " ปี"],
+    ["น้ำหนัก", answers.weight ? answers.weight + " กก." : "-"],
+    ["เบอร์โทร", answers.phone || "-"],
+    ["ประวัติแพ้ยา/อาหาร", answers.allergies || "-"],
+    ["โรคประจำตัว", answers.chronic_conditions || "-"],
+    ["รูปถ่าย", answers.photo ? "แนบแล้ว ✅" : "ไม่มี"]
+  ];
+  box.innerHTML = rows.map((r, i) => `
+    <div class="summary-row">
+      <div><div class="lbl">${r[0]}</div><div class="val">${escapeHtml(r[1])}</div></div>
+      <div><a href="#" class="edit-link" onclick="editStep(${i});return false;">แก้ไข</a></div>
+    </div>`).join("") + (answers.photo ? `<div class="text-center mt-2"><img id="confirmPhotoThumb" class="rounded-circle" style="width:80px;height:80px;object-fit:cover;" src="${answers.photo}"></div>` : "");
+  document.getElementById("confirmPanel").classList.remove("d-none");
+  addBotBubble("ตรวจสอบข้อมูลด้านล่างให้ถูกต้อง แล้วกดยืนยันได้เลยค่ะ");
+}
+
+function editStep(i) {
+  stepIndex = i;
+  runStep();
+}
+
+document.getElementById("submitBtn").addEventListener("click", async () => {
+  if (!conn || !conn.open) {
+    alert("ยังไม่ได้เชื่อมต่อกับร้านยา กรุณาลองใหม่อีกครั้งค่ะ");
+    return;
+  }
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  btn.innerText = "กำลังส่งข้อมูล...";
+  conn.send({ type: "ROBOT_CHECKIN_SUBMIT", payload: { ...answers } });
+});
+
+/* ---- success ---- */
+function showSuccess(patient) {
+  hideAllPanels();
+  document.getElementById("successPanel").classList.remove("d-none");
+  document.getElementById("successCode").innerText = patient.patient_special_id || "-";
+  const qrBox = document.getElementById("successQr");
+  qrBox.innerHTML = "";
+  const url = `${window.location.origin}${window.location.pathname.replace('robot_checkin.html', '')}patient_history.html?hostId=${peer ? peer.id : ""}&patientId=${patient.patient_special_id}`;
+  new QRCode(qrBox, { text: url, width: 120, height: 120 });
+  speak(`ลงทะเบียนสำเร็จค่ะ รหัสคนไข้ของคุณคือ ${String(patient.patient_special_id).split("").join(" ")}`);
+
+  let secondsLeft = 12;
+  const cd = document.getElementById("resetCountdown");
+  cd.innerText = `กำลังกลับไปหน้าแรกใน ${secondsLeft} วินาที เพื่อรอคนไข้ท่านถัดไป...`;
+  const timer = setInterval(() => {
+    secondsLeft--;
+    if (secondsLeft <= 0) {
+      clearInterval(timer);
+      resetKiosk();
+      return;
+    }
+    cd.innerText = `กำลังกลับไปหน้าแรกใน ${secondsLeft} วินาที เพื่อรอคนไข้ท่านถัดไป...`;
+  }, 1000);
+}
+
+function resetKiosk() {
+  Object.keys(answers).forEach((k) => (answers[k] = ""));
+  document.getElementById("chatLog").innerHTML = "";
+  startFlow();
+}
+
+/* ========================= WEBRTC CONNECTION ========================= */
+let peer = null;
+let conn = null;
+
+window.onload = () => {
+  initRobot();
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const hostId = urlParams.get("hostId");
+  if (!hostId) {
+    document.getElementById("connectError").classList.remove("d-none");
+    document.getElementById("connectError").innerText = "❌ QR Code ไม่ถูกต้อง กรุณาสแกน QR จากหน้าจอร้านยาอีกครั้ง";
+    document.getElementById("statusPill").innerText = "ไม่พบข้อมูลการเชื่อมต่อ";
+    return;
+  }
+
+  peer = new Peer({
+    config: {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" }
+      ]
+    }
+  });
+
+  peer.on("open", () => {
+    conn = peer.connect(hostId, { reliable: true });
+
+    conn.on("open", async () => {
+      document.getElementById("statusPill").innerText = "เชื่อมต่อร้านยาสำเร็จ";
+      await startFlow();
+    });
+
+    conn.on("data", (data) => {
+      if (data.type === "ROBOT_CHECKIN_ACK") {
+        showSuccess(data.payload);
+      } else if (data.type === "BLOCKED") {
+        document.getElementById("connectError").classList.remove("d-none");
+        document.getElementById("connectError").innerText = "❌ " + (data.payload && data.payload.reason ? data.payload.reason : "การเชื่อมต่อถูกระงับ");
+      }
+    });
+
+    conn.on("close", () => {
+      document.getElementById("statusPill").innerText = "การเชื่อมต่อถูกตัด กรุณาสแกน QR ใหม่";
+    });
+
+    conn.on("error", () => {
+      document.getElementById("connectError").classList.remove("d-none");
+      document.getElementById("connectError").innerText = "❌ ไม่สามารถเชื่อมต่อร้านยาได้ เครื่องร้านอาจปิดอยู่";
+    });
+  });
+
+  peer.on("error", () => {
+    document.getElementById("connectError").classList.remove("d-none");
+    document.getElementById("connectError").innerText = "❌ การเชื่อมต่อ P2P ขัดข้อง กรุณาลองสแกนใหม่อีกครั้ง";
+  });
+};
+</script>
+</body>
+</html>

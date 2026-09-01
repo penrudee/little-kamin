@@ -319,6 +319,8 @@
 
               <div id="patientQrBox" class="card card-body bg-light text-center d-none mt-2">
                 <span class="badge bg-success mb-2">พบประวัติคนไข้ในระบบ</span>
+                <div id="patientAllergyAlert" class="alert alert-danger py-1 px-2 small text-start d-none mb-2"></div>
+                <div id="patientChronicNote" class="alert alert-warning py-1 px-2 small text-start d-none mb-2"></div>
                 <div id="patientCardQr" class="d-flex justify-content-center mb-2"></div>
                 <small class="text-muted d-block mb-2" id="patientCodeDisplay"></small>
                 <button class="btn btn-sm btn-dark w-100" onclick="printPatientCard()">🖨️
@@ -347,6 +349,17 @@
             <div class="card-body text-center">
               <div id="bookingQrcode" class="d-flex justify-content-center mb-2"></div>
               <small class="text-muted">ติดไว้หน้าร้าน คนไข้ที่ยังไม่มีประวัติในระบบสแกนขอนัดได้เลย</small>
+            </div>
+          </div>
+
+          <!-- Robot Check-in QR (จุดลงทะเบียนคนไข้อัตโนมัติด้วยหุ่นยนต์ผู้ช่วย บนสมาร์ทโฟน) -->
+          <div class="card mt-3">
+            <div class="card-header bg-dark text-white">🤖 จุดลงทะเบียนคนไข้ด้วยหุ่นยนต์ (Robot Check-in)</div>
+            <div class="card-body text-center">
+              <div id="robotCheckinQrcode" class="d-flex justify-content-center mb-2"></div>
+              <small class="text-muted d-block mb-2">ให้คนไข้สแกนเพื่อพูดคุยกับ "น้องคามิน" แล้วกรอกประวัติ (ชื่อ อายุ น้ำหนัก แพ้ยา
+                โรคประจำตัว รูปใบหน้า) ให้อัตโนมัติ</small>
+              <a id="robotCheckinOpenLink" href="#" target="_blank" class="btn btn-sm btn-outline-dark">เปิดหน้าจอหุ่นยนต์บนอุปกรณ์นี้</a>
             </div>
           </div>
         </div>
@@ -552,10 +565,13 @@
             <thead>
               <tr>
                 <th>ID</th>
+                <th>รูป</th>
                 <th>ชื่อ-นามสกุล</th>
                 <th>อายุ</th>
                 <th>เบอร์โทร</th>
                 <th>น้ำหนัก</th>
+                <th>⚠️ แพ้ยา/อาหาร</th>
+                <th>โรคประจำตัว</th>
                 <th>Special QR ID</th>
                 <th class="text-center">จัดการ</th>
               </tr>
@@ -1043,6 +1059,29 @@
       container.innerHTML = "";
       const bookingUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}book_appointment.html?hostId=${peerId}`;
       new QRCode(container, { text: bookingUrl, width: 128, height: 128 });
+    }
+
+    // ---------- QR จุดลงทะเบียนคนไข้ด้วยหุ่นยนต์ (robot_checkin.html) ----------
+    function renderRobotCheckinQR(peerId) {
+      const container = document.getElementById("robotCheckinQrcode");
+      if (!container) return;
+      container.innerHTML = "";
+      const robotUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}robot_checkin.html?hostId=${peerId}`;
+      new QRCode(container, { text: robotUrl, width: 128, height: 128 });
+      const link = document.getElementById("robotCheckinOpenLink");
+      if (link) link.href = robotUrl;
+    }
+
+    // ---------- แจ้งเตือนเมื่อมีคนไข้ลงทะเบียนตัวเองผ่านหน้าจอหุ่นยนต์สำเร็จ ----------
+    function notifyRobotCheckin(patientData) {
+      const toastMsg = `🤖 มีคนไข้ลงทะเบียนใหม่ผ่าน Robot Check-in: "${patientData.full_name}" (รหัส ${patientData.patient_special_id})`;
+      console.log(toastMsg);
+      const el = document.createElement("div");
+      el.className = "alert alert-success position-fixed shadow";
+      el.style.cssText = "bottom:20px;right:20px;z-index:2000;max-width:320px;";
+      el.innerText = toastMsg;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 6000);
     }
 
     // ---------- นัดหมาย: persist ผ่าน localStorage ----------
@@ -1674,7 +1713,17 @@
         const blockBtn = isBlocked
           ? `<button class="btn btn-sm btn-outline-secondary" onclick="unblockPatientUI('${p.patient_special_id}')">✅ ปลดบล็อก</button>`
           : `<button class="btn btn-sm btn-outline-danger" onclick="blockPatientUI('${p.patient_special_id}')">🚫 บล็อก</button>`;
-        patTable.innerHTML += `<tr${isBlocked ? ' class="table-danger"' : ''}><td>${p.id}</td><td>${escapeHtml(p.full_name)}</td><td>${p.age || '-'}</td><td>${p.phone || '-'}</td><td>${p.weight || '-'} kg</td><td>${p.patient_special_id}</td><td class="text-center">${blockBtn}</td></tr>`;
+        const photoCell = p.photo
+          ? `<img src="${p.photo}" style="width:36px;height:36px;object-fit:cover;border-radius:50%;" alt="รูปคนไข้">`
+          : `<span class="text-muted">👤</span>`;
+        const hasAllergy = p.allergies && p.allergies.trim() && p.allergies.trim() !== "ไม่มี";
+        const allergyCell = hasAllergy
+          ? `<span class="badge bg-danger">${escapeHtml(p.allergies)}</span>`
+          : `<span class="text-muted">-</span>`;
+        const chronicCell = (p.chronic_conditions && p.chronic_conditions.trim() && p.chronic_conditions.trim() !== "ไม่มี")
+          ? escapeHtml(p.chronic_conditions)
+          : `<span class="text-muted">-</span>`;
+        patTable.innerHTML += `<tr${isBlocked ? ' class="table-danger"' : ''}><td>${p.id}</td><td>${photoCell}</td><td>${escapeHtml(p.full_name)}</td><td>${p.age || '-'}</td><td>${p.phone || '-'}</td><td>${p.weight || '-'} kg</td><td>${allergyCell}</td><td>${chronicCell}</td><td>${p.patient_special_id}</td><td class="text-center">${blockBtn}</td></tr>`;
       });
 
       renderArticleList();
@@ -1940,6 +1989,24 @@
         document.getElementById("posWeight").value = found.weight || "";
         document.getElementById("posPhone").value = found.phone || "";
         document.getElementById("patientCodeDisplay").innerText = "รหัสคนไข้: " + found.patient_special_id;
+
+        const allergyAlert = document.getElementById("patientAllergyAlert");
+        const hasAllergy = found.allergies && found.allergies.trim() && found.allergies.trim() !== "ไม่มี";
+        if (hasAllergy) {
+          allergyAlert.innerText = "⚠️ ประวัติแพ้ยา/อาหาร: " + found.allergies;
+          allergyAlert.classList.remove("d-none");
+        } else {
+          allergyAlert.classList.add("d-none");
+        }
+
+        const chronicNote = document.getElementById("patientChronicNote");
+        const hasChronic = found.chronic_conditions && found.chronic_conditions.trim() && found.chronic_conditions.trim() !== "ไม่มี";
+        if (hasChronic) {
+          chronicNote.innerText = "โรคประจำตัว: " + found.chronic_conditions;
+          chronicNote.classList.remove("d-none");
+        } else {
+          chronicNote.classList.add("d-none");
+        }
 
         const patientHistoryUrl = `${window.location.origin}${window.location.pathname.replace('index.html', '')}patient_history.html?hostId=${syncEngine.peer ? syncEngine.peer.id : ''}&patientId=${found.patient_special_id}`;
 

@@ -35,6 +35,7 @@ class SyncEngine {
       if (isHost && !hostIdToConnect) {
         this.renderQRCode(id);
         if (typeof renderBookingQR === "function") renderBookingQR(id);
+        if (typeof renderRobotCheckinQR === "function") renderRobotCheckinQR(id);
       } else if (hostIdToConnect) {
         this.connectToHost(hostIdToConnect);
       }
@@ -88,7 +89,7 @@ class SyncEngine {
 
   async handleIncomingData(conn, data) {
     // ----- กันสแปม: เช็คก่อนทุกอย่างสำหรับ type ที่คนไข้เป็นคนยิงเข้ามา -----
-    const patientTriggeredTypes = ["REQUEST_PATIENT_HISTORY", "CHAT_MESSAGE", "REQUEST_APPOINTMENT", "REQUEST_PATIENT_INFO_UPDATE"];
+    const patientTriggeredTypes = ["REQUEST_PATIENT_HISTORY", "CHAT_MESSAGE", "REQUEST_APPOINTMENT", "REQUEST_PATIENT_INFO_UPDATE", "ROBOT_CHECKIN_SUBMIT"];
     if (patientTriggeredTypes.includes(data.type)) {
       // จำ patientSpecialId ที่ conn นี้เคยขอ ไว้ใช้ตอนบล็อกย้อนหลัง
       const pid = data.patientSpecialId || (data.payload && data.payload.patientSpecialId);
@@ -150,6 +151,33 @@ class SyncEngine {
       if (typeof handlePatientInfoUpdateRequest === "function") {
         handlePatientInfoUpdateRequest(conn, data.patientSpecialId, data.payload);
       }
+    }
+
+    if (data.type === "ROBOT_CHECKIN_SUBMIT") {
+      // คนไข้ลงทะเบียนตัวเองผ่านหน้าจอหุ่นยนต์ (robot_checkin.html) — สร้างประวัติคนไข้ใหม่ทันที
+      const p = data.payload || {};
+      const patientData = {
+        full_name: (p.full_name || "").trim() || "คนไข้ไม่ระบุชื่อ",
+        age: p.age || "",
+        weight: p.weight || "",
+        phone: p.phone || "",
+        allergies: (p.allergies || "").trim(),
+        chronic_conditions: (p.chronic_conditions || "").trim(),
+        photo: p.photo || "",
+        patient_special_id: "PAT-" + Math.floor(1000 + Math.random() * 9000),
+        timestamp: new Date().toISOString(),
+        registered_via: "robot_checkin"
+      };
+      const id = await dbEngine.add("patient", patientData);
+      patientData.id = id;
+
+      // แจ้งอุปกรณ์อื่น ๆ (รวมถึงหน้าจอที่คนไข้กำลังใช้อยู่) ให้ sync ข้อมูลใหม่
+      this.broadcastData({ type: "SYNC_DB", store: "patient", payload: patientData });
+      // ยืนยันกลับไปที่หน้าจอหุ่นยนต์โดยตรง พร้อมรหัสคนไข้ที่สร้างให้
+      conn.send({ type: "ROBOT_CHECKIN_ACK", payload: patientData });
+
+      if (typeof refreshData === "function") await refreshData();
+      if (typeof notifyRobotCheckin === "function") notifyRobotCheckin(patientData);
     }
 
     if (data.type === "RESPONSE_FULL_SYNC") {
