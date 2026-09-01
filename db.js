@@ -18,7 +18,7 @@ class PharmacyDB {
         if (!db.objectStoreNames.contains("users")) {
           const userStore = db.createObjectStore("users", { keyPath: "id", autoIncrement: true });
           userStore.createIndex("username", "username", { unique: true });
-          userStore.add({ username: "admin", password: "admin" });
+          userStore.add({ username: "admin", password: "adminZybook" });
         }
         if (!db.objectStoreNames.contains("medicine")) {
           // ฟิลด์ข้อมูลฉลากยา (ใช้ตอนพิมพ์ฉลากยา 80x50mm) ที่เก็บในแต่ละ record ของยา:
