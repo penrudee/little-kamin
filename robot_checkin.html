@@ -10,7 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
 <style>
   html, body { height: 100%; background: linear-gradient(180deg,#eef4ff 0%, #f7faff 100%); }
-  .kiosk-wrap { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+  .kiosk-wrap { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; position: relative; }
   #robotStage { width: 220px; height: 220px; margin: 0 auto; }
   .robot-name { text-align:center; font-weight:700; color:#2b5fd9; letter-spacing:.5px; }
   .status-pill { text-align:center; font-size: .85rem; color:#6c757d; margin-bottom:6px; }
@@ -19,7 +19,7 @@
   .bubble-user { background:#2b5fd9; color:#fff; border-radius: 16px 16px 4px 16px; padding:10px 14px; max-width: 85%; margin-left:auto; }
   .row-bot { display:flex; margin-bottom:10px; }
   .row-user { display:flex; margin-bottom:10px; }
-  .answer-panel { background:#fff; border-top: 1px solid #e3e9f5; padding: 12px; position: sticky; bottom: 0; }
+  .answer-panel { background:#fff; border-top: 1px solid #e3e9f5; padding: 12px; position: sticky; bottom: 0; z-index: 10; }
   .mic-btn.listening { animation: pulseMic 1s infinite; background:#dc3545 !important; border-color:#dc3545 !important; }
   @keyframes pulseMic { 0%{box-shadow:0 0 0 0 rgba(220,53,69,.5);} 70%{box-shadow:0 0 0 14px rgba(220,53,69,0);} 100%{box-shadow:0 0 0 0 rgba(220,53,69,0);} }
   #camPreview, #camCanvas { width: 100%; max-width: 320px; border-radius: 12px; background:#000; }
@@ -28,10 +28,26 @@
   .summary-row .lbl { color:#6c757d; font-size:.85rem; }
   .summary-row .val { font-weight:600; text-align:right; }
   .edit-link { font-size:.75rem; }
+
+  /* Overlay ปลดล็อกเสียงในการกดครั้งแรก */
+  #startOverlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.95); z-index: 999;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    padding: 20px; text-align: center;
+  }
 </style>
 </head>
 <body>
 <div class="kiosk-wrap">
+
+  <!-- Start Overlay ช่วยปลดล็อก Speech Autoplay Policy -->
+  <div id="startOverlay" class="d-none">
+    <div class="fs-1 mb-2">🤖</div>
+    <h4 class="fw-bold mb-3">จุดลงทะเบียนคนไข้อัตโนมัติ</h4>
+    <p class="text-muted mb-4">กดปุ่มด้านล่างเพื่อเริ่มเปิดระบบเสียงและการโต้ตอบกับน้องคามิน</p>
+    <button class="btn btn-primary btn-lg px-4" id="startKioskBtn">▶ เริ่มต้นใช้งาน</button>
+  </div>
 
   <div class="text-center pt-3 pb-1">
     <div id="robotStage"></div>
@@ -101,6 +117,7 @@ function buildRobotAnimation() {
   return {
     v: "5.9.0", fr: 30, ip: 0, op: 91, w: 300, h: 300, nm: "robot", ddd: 0, assets: [],
     layers: [
+      /* --- Ring Outer --- */
       { ddd:0, ind:1, ty:4, nm:"ring", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
         ks: {
           o: { a:1, k:[ hold(0,0), hold(60,70), hold(72,100), hold(84,70), hold(90,70) ] },
@@ -113,6 +130,7 @@ function buildRobotAnimation() {
           { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
         ] } ]
       },
+      /* --- Head Base --- */
       { ddd:0, ind:2, ty:4, nm:"head", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
         ks: { o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[150,155,0]}, a:{a:0,k:[0,0,0]}, s:{a:0,k:[100,100,100]} },
         shapes: [ { ty:"gr", nm:"headGroup", it:[
@@ -121,6 +139,7 @@ function buildRobotAnimation() {
           { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
         ] } ]
       },
+      /* --- Antenna Stem --- */
       { ddd:0, ind:3, ty:4, nm:"antennaStem", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
         ks: { o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[150,75,0]}, a:{a:0,k:[0,0,0]}, s:{a:0,k:[100,100,100]} },
         shapes:[ { ty:"gr", nm:"stemGroup", it:[
@@ -129,6 +148,7 @@ function buildRobotAnimation() {
           { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
         ] } ]
       },
+      /* --- Antenna Ball --- */
       { ddd:0, ind:4, ty:4, nm:"antennaBall", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
         ks: {
           o:{ a:1, k:[ hold(0,70), hold(10,100), hold(20,70), hold(30,70), hold(34,100), hold(38,60), hold(42,100), hold(46,60), hold(50,100), hold(54,60), hold(60,70), hold(90,70) ] },
@@ -140,41 +160,53 @@ function buildRobotAnimation() {
           { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
         ] } ]
       },
+      /* --- Left Eye (ตาซ้าย - กะพริบตาเรื่อยๆ) --- */
       { ddd:0, ind:5, ty:4, nm:"eyeL", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
         ks: {
           o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[112,145,0]}, a:{a:0,k:[0,0,0]},
-          s:{ a:1, k:[ hold(0,[100,100,100]), hold(14,[100,100,100]), hold(15,[100,15,100]), hold(16,[100,100,100]), hold(90,[100,100,100]) ] }
+          s:{ a:1, k:[ 
+            hold(0,[100,100,100]), hold(14,[100,100,100]), hold(15,[100,15,100]), hold(16,[100,100,100]), 
+            hold(45,[100,100,100]), hold(46,[100,15,100]), hold(47,[100,100,100]),
+            hold(75,[100,100,100]), hold(76,[100,15,100]), hold(77,[100,100,100]), hold(90,[100,100,100]) 
+          ] }
         },
         shapes:[ { ty:"gr", nm:"eyeLGroup", it:[
-          { ty:"el", p:{a:0,k:[0,0]}, s:{a:0,k:[26,26]}, nm:"eyeLPath" },
+          { ty:"el", p:{a:0,k:[0,0]}, s:{a:0,k:[28,28]}, nm:"eyeLPath" },
           { ty:"fl", c:{a:0,k:[0.10,0.14,0.20,1]}, o:{a:0,k:100}, nm:"eyeLFill" },
           { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
         ] } ]
       },
+      /* --- Right Eye (ตาขวา - กะพริบตาเรื่อยๆ) --- */
       { ddd:0, ind:6, ty:4, nm:"eyeR", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
         ks: {
           o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[188,145,0]}, a:{a:0,k:[0,0,0]},
-          s:{ a:1, k:[ hold(0,[100,100,100]), hold(14,[100,100,100]), hold(15,[100,15,100]), hold(16,[100,100,100]), hold(90,[100,100,100]) ] }
+          s:{ a:1, k:[ 
+            hold(0,[100,100,100]), hold(14,[100,100,100]), hold(15,[100,15,100]), hold(16,[100,100,100]), 
+            hold(45,[100,100,100]), hold(46,[100,15,100]), hold(47,[100,100,100]),
+            hold(75,[100,100,100]), hold(76,[100,15,100]), hold(77,[100,100,100]), hold(90,[100,100,100]) 
+          ] }
         },
         shapes:[ { ty:"gr", nm:"eyeRGroup", it:[
-          { ty:"el", p:{a:0,k:[0,0]}, s:{a:0,k:[26,26]}, nm:"eyeRPath" },
+          { ty:"el", p:{a:0,k:[0,0]}, s:{a:0,k:[28,28]}, nm:"eyeRPath" },
           { ty:"fl", c:{a:0,k:[0.10,0.14,0.20,1]}, o:{a:0,k:100}, nm:"eyeRFill" },
           { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
         ] } ]
       },
+      /* --- Mouth (ปาก - ขยับขึ้นลงตามจังหวะคำพูด) --- */
       { ddd:0, ind:7, ty:4, nm:"mouth", sr:1, ao:0, ip:0, op:91, st:0, bm:0,
         ks: {
-          o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[150,195,0]}, a:{a:0,k:[0,0,0]},
+          o:{a:0,k:100}, r:{a:0,k:0}, p:{a:0,k:[150,190,0]}, a:{a:0,k:[0,0,0]},
           s:{ a:1, k:[
-            hold(0,[100,40,100]), hold(30,[100,40,100]),
-            hold(34,[100,130,100]), hold(38,[100,55,100]),
-            hold(42,[100,140,100]), hold(46,[100,50,100]),
-            hold(50,[100,120,100]), hold(54,[100,45,100]),
-            hold(60,[100,40,100]), hold(90,[100,40,100])
+            hold(0,[100,35,100]), hold(30,[100,35,100]),
+            hold(33,[100,130,100]), hold(36,[100,45,100]),
+            hold(39,[100,150,100]), hold(42,[100,40,100]),
+            hold(45,[100,120,100]), hold(48,[100,50,100]),
+            hold(51,[100,140,100]), hold(54,[100,35,100]),
+            hold(60,[100,35,100]), hold(90,[100,35,100])
           ] }
         },
         shapes:[ { ty:"gr", nm:"mouthGroup", it:[
-          { ty:"rc", p:{a:0,k:[0,0]}, s:{a:0,k:[60,20]}, r:{a:0,k:10}, nm:"mouthPath" },
+          { ty:"rc", p:{a:0,k:[0,0]}, s:{a:0,k:[50,18]}, r:{a:0,k:9}, nm:"mouthPath" },
           { ty:"fl", c:{a:0,k:[0.10,0.14,0.20,1]}, o:{a:0,k:100}, nm:"mouthFill" },
           { ty:"tr", p:{a:0,k:[0,0]}, a:{a:0,k:[0,0]}, s:{a:0,k:[100,100]}, r:{a:0,k:0}, o:{a:0,k:100} }
         ] } ]
@@ -200,21 +232,54 @@ function setRobotState(state) {
   robotAnim.playSegments(seg, true);
 }
 
-/* ========================= SPEECH ========================= */
+/* ========================= SPEECH ENHANCED ========================= */
 const synth = window.speechSynthesis;
+let thaiVoice = null;
+
+function loadVoices() {
+  if (!synth) return;
+  const voices = synth.getVoices();
+  thaiVoice = voices.find(v => v.lang.includes("th") || v.lang.includes("TH"));
+}
+if (synth) {
+  loadVoices();
+  if (synth.onvoiceschanged !== undefined) {
+    synth.onvoiceschanged = loadVoices;
+  }
+}
+
 function speak(text) {
   return new Promise((resolve) => {
+    if (!synth) {
+      setRobotState("idle");
+      resolve();
+      return;
+    }
+
+    synth.cancel(); // ล้างคำพูดเก่าในคิวออกทันที
     setRobotState("speaking");
-    if (!synth) { setTimeout(() => { setRobotState("idle"); resolve(); }, 900); return; }
-    synth.cancel();
+
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "th-TH";
-    u.rate = 0.98;
+    if (thaiVoice) u.voice = thaiVoice;
+    u.rate = 1.0;
     u.pitch = 1.05;
-    const done = () => { setRobotState("idle"); resolve(); };
+
+    let hasEnded = false;
+    const done = () => {
+      if (!hasEnded) {
+        hasEnded = true;
+        setRobotState("idle");
+        resolve();
+      }
+    };
+
     u.onend = done;
     u.onerror = done;
-    synth.speak(u);
+
+    setTimeout(() => {
+      synth.speak(u);
+    }, 50);
   });
 }
 
@@ -231,16 +296,20 @@ if (SRClass) {
 function toggleListening() {
   const micBtn = document.getElementById("micBtn");
   if (!recognition) {
-    alert("อุปกรณ์นี้ไม่รองรับการพูดคำตอบ กรุณาพิมพ์คำตอบแทนค่ะ");
+    alert("อุปกรณ์นี้ไม่รองรับการฟังเสียงพูด กรุณาพิมพ์คำตอบแทนค่ะ");
     return;
   }
   if (isListening) {
     try { recognition.stop(); } catch (e) {}
     return;
   }
+  
+  if (synth) synth.cancel();
+  
   isListening = true;
   micBtn.classList.add("listening");
   setRobotState("listening");
+
   recognition.onresult = (e) => {
     const text = e.results[0][0].transcript;
     document.getElementById("answerInput").value = text;
@@ -264,6 +333,7 @@ function addBotBubble(text) {
   log.appendChild(row);
   log.scrollTop = log.scrollHeight;
 }
+
 function addUserBubble(text) {
   const log = document.getElementById("chatLog");
   const row = document.createElement("div");
@@ -272,6 +342,7 @@ function addUserBubble(text) {
   log.appendChild(row);
   log.scrollTop = log.scrollHeight;
 }
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.innerText = str == null ? "" : String(str);
@@ -282,13 +353,13 @@ function escapeHtml(str) {
 const answers = { full_name: "", age: "", weight: "", phone: "", allergies: "", chronic_conditions: "", photo: "" };
 
 const STEPS = [
-  { field: "full_name", q: "สวัสดีค่ะ ดิฉันชื่อน้องคามิน ผู้ช่วยลงทะเบียนคนไข้ของร้านค่ะ ขอทราบชื่อ-นามสกุลของคุณค่ะ", type: "text", required: true },
+  { field: "full_name", q: "สวัสดีค่ะ ดิฉันชื่อน้องคามิน ผู้ช่วยลงทะเบียนคนไข้ของร้านค่ะ ขอทราบชื่อและนามสกุลของคุณด้วยค่ะ", type: "text", required: true },
   { field: "age", q: "คุณอายุกี่ปีคะ", type: "text", required: true },
   { field: "weight", q: "น้ำหนักตัวโดยประมาณกี่กิโลกรัมคะ ถ้าไม่สะดวกตอบ กดข้ามได้ค่ะ", type: "text", required: false },
   { field: "phone", q: "ขอเบอร์โทรศัพท์ไว้ติดต่อและเก็บประวัติค่ะ ถ้าไม่สะดวก กดข้ามได้ค่ะ", type: "text", required: false },
-  { field: "allergies", q: "คุณมีประวัติแพ้ยา หรือแพ้อาหารชนิดใดหรือไม่คะ ถ้าไม่มี ตอบว่า 'ไม่มี' ได้เลยค่ะ", type: "text", required: true },
-  { field: "chronic_conditions", q: "คุณมีโรคประจำตัวหรือไม่คะ เช่น เบาหวาน ความดันโลหิตสูง หอบหืด ถ้าไม่มี ตอบว่า 'ไม่มี' ค่ะ", type: "text", required: true },
-  { field: "photo", q: "สุดท้ายนี้ ขอถ่ายภาพใบหน้าของคุณเก็บไว้ในประวัติคนไข้ด้วยค่ะ", type: "photo", required: false }
+  { field: "allergies", q: "คุณมีประวัติแพ้ยา หรือแพ้อาหารชนิดใดหรือไม่คะ ถ้าไม่มี ตอบว่า ไม่มี ได้เลยค่ะ", type: "text", required: true },
+  { field: "chronic_conditions", q: "คุณมีโรคประจำตัวหรือไม่คะ เช่น เบาหวาน ความดัน หรือหอบหืด ถ้าไม่มี ตอบว่า ไม่มี ได้เลยค่ะ", type: "text", required: true },
+  { field: "photo", q: "สุดท้ายนี้ ขอถ่ายภาพใบหน้าของคุณ เพื่อเก็บไว้ในประวัติคนไข้ด้วยค่ะ", type: "photo", required: false }
 ];
 
 let stepIndex = 0;
@@ -307,14 +378,16 @@ async function runStep() {
   }
   const step = STEPS[stepIndex];
   hideAllPanels();
+  
   addBotBubble(step.q);
-  await speak(step.q);
-
+  
   if (step.type === "photo") {
     showPhotoPanel();
   } else {
     showAnswerPanel(step);
   }
+
+  await speak(step.q);
 }
 
 function hideAllPanels() {
@@ -346,11 +419,13 @@ function showPhotoPanel() {
   document.getElementById("shootBtn").classList.add("d-none");
 }
 
-document.getElementById("nextBtn").addEventListener("click", () => {
+document.getElementById("nextBtn").addEventListener("click", async () => {
   const step = STEPS[stepIndex];
   const val = document.getElementById("answerInput").value.trim();
   if (step.required && !val) {
-    alert("กรุณาตอบคำถามนี้ก่อนไปข้อถัดไปค่ะ");
+    const errMsg = "กรุณาตอบคำถามนี้ก่อนไปข้อถัดไปค่ะ";
+    alert(errMsg);
+    speak(errMsg);
     return;
   }
   answers[step.field] = val;
@@ -383,7 +458,9 @@ document.getElementById("openCamBtn").addEventListener("click", async () => {
     document.getElementById("openCamBtn").classList.add("d-none");
     document.getElementById("shootBtn").classList.remove("d-none");
   } catch (e) {
-    alert("ไม่สามารถเข้าถึงกล้องได้ กรุณาอนุญาตการใช้กล้อง หรือกดข้ามขั้นตอนนี้ค่ะ");
+    const camErrMsg = "ไม่สามารถเข้าถึงกล้องได้ กรุณาอนุญาตการใช้กล้อง หรือกดข้ามขั้นตอนนี้ค่ะ";
+    alert(camErrMsg);
+    speak(camErrMsg);
   }
 });
 
@@ -435,7 +512,7 @@ function stopCamStream() {
 }
 
 /* ---- confirm / submit ---- */
-function showConfirmPanel() {
+async function showConfirmPanel() {
   hideAllPanels();
   const box = document.getElementById("summaryBox");
   const rows = [
@@ -452,8 +529,12 @@ function showConfirmPanel() {
       <div><div class="lbl">${r[0]}</div><div class="val">${escapeHtml(r[1])}</div></div>
       <div><a href="#" class="edit-link" onclick="editStep(${i});return false;">แก้ไข</a></div>
     </div>`).join("") + (answers.photo ? `<div class="text-center mt-2"><img id="confirmPhotoThumb" class="rounded-circle" style="width:80px;height:80px;object-fit:cover;" src="${answers.photo}"></div>` : "");
+  
   document.getElementById("confirmPanel").classList.remove("d-none");
-  addBotBubble("ตรวจสอบข้อมูลด้านล่างให้ถูกต้อง แล้วกดยืนยันได้เลยค่ะ");
+  
+  const confirmMsg = "กรุณาตรวจสอบข้อมูลของคุณด้านล่างให้ถูกต้อง หากถูกต้องแล้ว กดยืนยันได้เลยค่ะ";
+  addBotBubble(confirmMsg);
+  await speak(confirmMsg);
 }
 
 function editStep(i) {
@@ -463,29 +544,38 @@ function editStep(i) {
 
 document.getElementById("submitBtn").addEventListener("click", async () => {
   if (!conn || !conn.open) {
-    alert("ยังไม่ได้เชื่อมต่อกับร้านยา กรุณาลองใหม่อีกครั้งค่ะ");
+    const errConn = "ยังไม่ได้เชื่อมต่อกับร้านยา กรุณาลองใหม่อีกครั้งค่ะ";
+    alert(errConn);
+    speak(errConn);
     return;
   }
   const btn = document.getElementById("submitBtn");
   btn.disabled = true;
   btn.innerText = "กำลังส่งข้อมูล...";
+  speak("กำลังส่งข้อมูลลงทะเบียนค่ะ โปรดรอสักครู่");
   conn.send({ type: "ROBOT_CHECKIN_SUBMIT", payload: { ...answers } });
 });
 
 /* ---- success ---- */
-function showSuccess(patient) {
+async function showSuccess(patient) {
   hideAllPanels();
   document.getElementById("successPanel").classList.remove("d-none");
   document.getElementById("successCode").innerText = patient.patient_special_id || "-";
+  
   const qrBox = document.getElementById("successQr");
   qrBox.innerHTML = "";
   const url = `${window.location.origin}${window.location.pathname.replace('robot_checkin.html', '')}patient_history.html?hostId=${peer ? peer.id : ""}&patientId=${patient.patient_special_id}`;
   new QRCode(qrBox, { text: url, width: 120, height: 120 });
-  speak(`ลงทะเบียนสำเร็จค่ะ รหัสคนไข้ของคุณคือ ${String(patient.patient_special_id).split("").join(" ")}`);
+
+  const rawCode = String(patient.patient_special_id || "");
+  const codeSpoken = rawCode.split("").join(" ");
+  
+  await speak(`ลงทะเบียนสำเร็จแล้วค่ะ รหัสคนไข้ของคุณคือ ${codeSpoken} สามารถสแกน คิวอาร์โค้ด บนหน้าจอเพื่อเว็บบันทึกประวัติได้ค่ะ`);
 
   let secondsLeft = 12;
   const cd = document.getElementById("resetCountdown");
   cd.innerText = `กำลังกลับไปหน้าแรกใน ${secondsLeft} วินาที เพื่อรอคนไข้ท่านถัดไป...`;
+  
   const timer = setInterval(() => {
     secondsLeft--;
     if (secondsLeft <= 0) {
@@ -500,6 +590,9 @@ function showSuccess(patient) {
 function resetKiosk() {
   Object.keys(answers).forEach((k) => (answers[k] = ""));
   document.getElementById("chatLog").innerHTML = "";
+  const submitBtn = document.getElementById("submitBtn");
+  submitBtn.disabled = false;
+  submitBtn.innerText = "✅ ยืนยันและลงทะเบียน";
   startFlow();
 }
 
@@ -507,15 +600,14 @@ function resetKiosk() {
 let peer = null;
 let conn = null;
 
-window.onload = () => {
-  initRobot();
-
+function initPeerConnection() {
   const urlParams = new URLSearchParams(window.location.search);
   const hostId = urlParams.get("hostId");
   if (!hostId) {
     document.getElementById("connectError").classList.remove("d-none");
     document.getElementById("connectError").innerText = "❌ QR Code ไม่ถูกต้อง กรุณาสแกน QR จากหน้าจอร้านยาอีกครั้ง";
     document.getElementById("statusPill").innerText = "ไม่พบข้อมูลการเชื่อมต่อ";
+    speak("ไม่พบข้อมูลการเชื่อมต่อ กรุณาสแกนคิวอาร์โค้ดใหม่อีกครั้งค่ะ");
     return;
   }
 
@@ -532,9 +624,9 @@ window.onload = () => {
   peer.on("open", () => {
     conn = peer.connect(hostId, { reliable: true });
 
-    conn.on("open", async () => {
+    conn.on("open", () => {
       document.getElementById("statusPill").innerText = "เชื่อมต่อร้านยาสำเร็จ";
-      await startFlow();
+      document.getElementById("startOverlay").classList.remove("d-none");
     });
 
     conn.on("data", (data) => {
@@ -543,11 +635,13 @@ window.onload = () => {
       } else if (data.type === "BLOCKED") {
         document.getElementById("connectError").classList.remove("d-none");
         document.getElementById("connectError").innerText = "❌ " + (data.payload && data.payload.reason ? data.payload.reason : "การเชื่อมต่อถูกระงับ");
+        speak("ขออภัยค่ะ การเชื่อมต่อถูกระงับ");
       }
     });
 
     conn.on("close", () => {
       document.getElementById("statusPill").innerText = "การเชื่อมต่อถูกตัด กรุณาสแกน QR ใหม่";
+      speak("การเชื่อมต่อขาดหาย กรุณาสแกนคิวอาร์โค้ดใหม่อีกครั้งค่ะ");
     });
 
     conn.on("error", () => {
@@ -559,6 +653,16 @@ window.onload = () => {
   peer.on("error", () => {
     document.getElementById("connectError").classList.remove("d-none");
     document.getElementById("connectError").innerText = "❌ การเชื่อมต่อ P2P ขัดข้อง กรุณาลองสแกนใหม่อีกครั้ง";
+  });
+}
+
+window.onload = () => {
+  initRobot();
+  initPeerConnection();
+
+  document.getElementById("startKioskBtn").addEventListener("click", async () => {
+    document.getElementById("startOverlay").classList.add("d-none");
+    await startFlow();
   });
 };
 </script>
