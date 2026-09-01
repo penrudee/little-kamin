@@ -19,9 +19,52 @@
   .bubble-user { background:#2b5fd9; color:#fff; border-radius: 16px 16px 4px 16px; padding:10px 14px; max-width: 85%; margin-left:auto; }
   .row-bot { display:flex; margin-bottom:10px; }
   .row-user { display:flex; margin-bottom:10px; }
-  .answer-panel { background:#fff; border-top: 1px solid #e3e9f5; padding: 12px; position: sticky; bottom: 0; z-index: 10; }
-  .mic-btn.listening { animation: pulseMic 1s infinite; background:#dc3545 !important; border-color:#dc3545 !important; }
-  @keyframes pulseMic { 0%{box-shadow:0 0 0 0 rgba(220,53,69,.5);} 70%{box-shadow:0 0 0 14px rgba(220,53,69,0);} 100%{box-shadow:0 0 0 0 rgba(220,53,69,0);} }
+  .answer-panel { background:#fff; border-top: 1px solid #e3e9f5; padding: 16px; position: sticky; bottom: 0; z-index: 10; border-radius: 20px 20px 0 0; box-shadow: 0 -4px 12px rgba(0,0,0,0.05); }
+  
+  /* UI ปุ่มไมโครโฟนขนาดใหญ่ตรงกลาง */
+  .mic-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 12px 0 18px 0;
+  }
+  .big-mic-btn {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: #2b5fd9;
+    border: none;
+    color: #fff;
+    font-size: 2.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(43, 95, 217, 0.35);
+    transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
+    outline: none;
+    position: relative;
+  }
+  .big-mic-btn:active {
+    transform: scale(0.95);
+  }
+  .big-mic-btn.listening {
+    background-color: #dc3545 !important;
+    animation: pulseMic 1.2s infinite;
+  }
+  .mic-status-text {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 8px;
+    font-weight: 500;
+  }
+
+  @keyframes pulseMic { 
+    0% { box-shadow: 0 0 0 0 rgba(220,53,69,.6); } 
+    70% { box-shadow: 0 0 0 20px rgba(220,53,69,0); } 
+    100% { box-shadow: 0 0 0 0 rgba(220,53,69,0); } 
+  }
+
   #camPreview, #camCanvas { width: 100%; max-width: 320px; border-radius: 12px; background:#000; }
   #photoThumb { width: 110px; height: 110px; object-fit: cover; border-radius: 50%; border: 3px solid #2b5fd9; }
   .summary-row { display:flex; justify-content: space-between; border-bottom: 1px dashed #e3e9f5; padding: 6px 0; }
@@ -61,13 +104,19 @@
 
   <!-- Answer panel: text/number step -->
   <div id="answerPanel" class="answer-panel d-none">
+    
+    <!-- ปุ่มไมโครโฟนขนาดใหญ่ตรงกลาง -->
+    <div class="mic-wrapper">
+      <button class="big-mic-btn" id="micBtn" title="กดเพื่อพูดคำตอบ">🎤</button>
+      <div class="mic-status-text" id="micStatusText">กดไมค์เพื่อเริ่มพูดคำตอบ</div>
+    </div>
+
     <div class="d-flex gap-2 mb-2">
-      <input type="text" id="answerInput" class="form-control" placeholder="พิมพ์คำตอบที่นี่ หรือกดไมค์เพื่อพูด...">
-      <button class="btn btn-outline-primary mic-btn" id="micBtn" title="พูดคำตอบ">🎤</button>
+      <input type="text" id="answerInput" class="form-control form-control-lg text-center" placeholder="หรือพิมพ์คำตอบที่นี่...">
     </div>
     <div class="d-flex gap-2">
       <button class="btn btn-outline-secondary d-none" id="skipBtn">ข้ามข้อนี้</button>
-      <button class="btn btn-primary w-100" id="nextBtn">ถัดไป ➜</button>
+      <button class="btn btn-primary w-100 btn-lg" id="nextBtn">ถัดไป ➜</button>
     </div>
   </div>
 
@@ -283,44 +332,75 @@ function speak(text) {
   });
 }
 
+/* ========================= RECOGNITION FIXED ========================= */
 const SRClass = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isListening = false;
+
 if (SRClass) {
   recognition = new SRClass();
   recognition.lang = "th-TH";
   recognition.continuous = false;
   recognition.interimResults = false;
+
+  recognition.onresult = (e) => {
+    if (e.results && e.results[0] && e.results[0][0]) {
+      const text = e.results[0][0].transcript;
+      document.getElementById("answerInput").value = text;
+    }
+  };
+
+  recognition.onerror = (e) => {
+    console.warn("Speech recognition error:", e.error);
+    stopListeningUI();
+  };
+
+  recognition.onend = () => {
+    stopListeningUI();
+  };
+}
+
+function stopListeningUI() {
+  isListening = false;
+  const micBtn = document.getElementById("micBtn");
+  const micStatusText = document.getElementById("micStatusText");
+  if (micBtn) micBtn.classList.remove("listening");
+  if (micStatusText) micStatusText.innerText = "กดไมค์เพื่อเริ่มพูดคำตอบ";
+  setRobotState("idle");
 }
 
 function toggleListening() {
   const micBtn = document.getElementById("micBtn");
+  const micStatusText = document.getElementById("micStatusText");
+
   if (!recognition) {
     alert("อุปกรณ์นี้ไม่รองรับการฟังเสียงพูด กรุณาพิมพ์คำตอบแทนค่ะ");
     return;
   }
+
+  // หากกำลังฟังอยู่แล้วกดซ้ำ ให้ปิด
   if (isListening) {
     try { recognition.stop(); } catch (e) {}
+    stopListeningUI();
     return;
   }
   
+  // ตัดเสียงพูดของบอททันทีเพื่อป้องกันไมค์รับเสียงตัวเอง
   if (synth) synth.cancel();
-  
-  isListening = true;
-  micBtn.classList.add("listening");
-  setRobotState("listening");
 
-  recognition.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    document.getElementById("answerInput").value = text;
-  };
-  recognition.onerror = () => {};
-  recognition.onend = () => {
-    isListening = false;
-    micBtn.classList.remove("listening");
-    setRobotState("idle");
-  };
-  try { recognition.start(); } catch (e) { isListening = false; micBtn.classList.remove("listening"); setRobotState("idle"); }
+  // หน่วงเวลาเล็กน้อย 100ms เพื่อให้เสียงบอทดับสนิทก่อนเปิดรับไมค์
+  setTimeout(() => {
+    try {
+      isListening = true;
+      micBtn.classList.add("listening");
+      micStatusText.innerText = "กำลังฟัง... พูดคำตอบได้เลยค่ะ";
+      setRobotState("listening");
+      recognition.start();
+    } catch (e) {
+      console.error("Recognition start error:", e);
+      stopListeningUI();
+    }
+  }, 100);
 }
 
 /* ========================= CHAT LOG ========================= */
@@ -403,10 +483,10 @@ function showAnswerPanel(step) {
   const skipBtn = document.getElementById("skipBtn");
   input.value = "";
   input.type = "text";
-  input.placeholder = step.required ? "พิมพ์คำตอบที่นี่ หรือกดไมค์เพื่อพูด..." : "พิมพ์คำตอบ หรือกดข้ามข้อนี้...";
+  input.placeholder = step.required ? "หรือพิมพ์คำตอบที่นี่..." : "หรือพิมพ์คำตอบ / กดข้าม...";
   skipBtn.classList.toggle("d-none", step.required);
   panel.classList.remove("d-none");
-  input.focus();
+  stopListeningUI();
 }
 
 function showPhotoPanel() {
