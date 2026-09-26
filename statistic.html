@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard & Analytics</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased">
+
+  <!-- ==================== 1. LOGIN SECTION ==================== -->
+  <div id="login-section" class="flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-md bg-slate-800 rounded-xl shadow-2xl border border-slate-700 p-8 space-y-6">
+      <div class="text-center">
+        <h1 class="text-2xl font-bold text-white">Admin Authentication</h1>
+        <p class="text-sm text-slate-400 mt-1">เข้าสู่ระบบเพื่อดูสถิติการใช้งาน</p>
+      </div>
+
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1">Username</label>
+          <input type="text" id="username" required 
+            class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white placeholder-slate-500 transition">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1">Password</label>
+          <input type="password" id="password" required 
+            class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white placeholder-slate-500 transition">
+        </div>
+        <div id="login-error" class="text-red-400 text-sm hidden text-center">
+          ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง
+        </div>
+        <button type="submit" 
+          class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg shadow-md transition duration-200">
+          เข้าสู่ระบบ
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== 2. DASHBOARD SECTION ==================== -->
+  <div id="dashboard-section" class="hidden p-6 max-w-7xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700">
+      <div>
+        <h1 class="text-xl font-bold text-white">Analytics Overview</h1>
+        <p class="text-xs text-slate-400">ข้อมูลสถิติผู้ใช้งานจาก Umami</p>
+      </div>
+      <button id="logout-btn" class="px-4 py-2 text-sm bg-slate-700 hover:bg-red-600 text-slate-200 rounded-lg transition">
+        ออกจากระบบ
+      </button>
+    </div>
+
+    <!-- Stat Cards Summary -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+        <span class="text-xs text-slate-400 font-medium">Total Pageviews</span>
+        <div id="stat-pageviews" class="text-3xl font-extrabold text-indigo-400 mt-2">--</div>
+      </div>
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+        <span class="text-xs text-slate-400 font-medium">Unique Visitors</span>
+        <div id="stat-visitors" class="text-3xl font-extrabold text-emerald-400 mt-2">--</div>
+      </div>
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+        <span class="text-xs text-slate-400 font-medium">Bounce Rate</span>
+        <div id="stat-bounce" class="text-3xl font-extrabold text-amber-400 mt-2">--</div>
+      </div>
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+        <span class="text-xs text-slate-400 font-medium">Avg. Visit Time</span>
+        <div id="stat-time" class="text-3xl font-extrabold text-cyan-400 mt-2">--</div>
+      </div>
+    </div>
+
+    <!-- Chart Component -->
+    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+      <h2 class="text-md font-semibold text-slate-200 mb-4">แนวโน้มการเข้าใช้งาน (Traffic Over Time)</h2>
+      <div class="relative h-72 w-full">
+        <canvas id="trafficChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 3. JAVASCRIPT LOGIC ==================== -->
+  <script>
+    const loginSection = document.getElementById('login-section');
+    const dashboardSection = document.getElementById('dashboard-section');
+    const loginForm = document.getElementById('login-form');
+    const loginError = document.getElementById('login-error');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    let trafficChart = null;
+
+    // ตรวจสอบสถานะการเข้าสู่ระบบเมื่อโหลดหน้า
+    document.addEventListener('DOMContentLoaded', async () => {
+      const isAuthenticated = await checkAuthStatus();
+      if (isAuthenticated) {
+        showDashboard();
+      }
+    });
+
+    // Handle Login Submit
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginError.classList.add('hidden');
+
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (response.ok) {
+          showDashboard();
+        } else {
+          loginError.classList.remove('hidden');
+        }
+      } catch (err) {
+        console.error('Login Error:', err);
+        loginError.innerText = 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
+        loginError.classList.remove('hidden');
+      }
+    });
+
+    // Handle Logout
+    logoutBtn.addEventListener('click', async () => {
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.reload();
+    });
+
+    // ตรวจสอบ Cookie / Session ผ่าน Endpoint
+    async function checkAuthStatus() {
+      try {
+        const res = await fetch('/api/check-auth');
+        return res.ok;
+      } catch {
+        return false;
+      }
+    }
+
+    // แสดงหน้า Dashboard และดึงข้อมูลสถิติ
+    async function showDashboard() {
+      loginSection.classList.add('hidden');
+      dashboardSection.classList.remove('hidden');
+      await fetchUmamiStats();
+    }
+
+    // ดึงข้อมูลสถิติจาก API Proxy (Cloudflare Worker)
+    async function fetchUmamiStats() {
+      try {
+        const res = await fetch('/api/stats');
+        if (!res.ok) throw new Error('Unauthorized or Fetch Failed');
+        
+        const data = await res.json();
+
+        // แสดงผลใน Stat Cards
+        document.getElementById('stat-pageviews').innerText = data.pageviews.value.toLocaleString();
+        document.getElementById('stat-visitors').innerText = data.visitors.value.toLocaleString();
+        document.getElementById('stat-bounce').innerText = `${Math.round(data.bounceRate || 0)}%`;
+        document.getElementById('stat-time').innerText = formatDuration(data.totaltime.value / (data.visitors.value || 1));
+
+        // วาดกราฟ
+        renderChart(data.chartData);
+      } catch (err) {
+        console.error('Failed to load stats:', err);
+      }
+    }
+
+    // แปลงวินาทีเป็น นาที:วินาที
+    function formatDuration(seconds) {
+      if (!seconds || isNaN(seconds)) return '0s';
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    }
+
+    // ฟังก์ชันวาดกราฟด้วย Chart.js
+    function renderChart(chartData) {
+      const ctx = document.getElementById('trafficChart').getContext('2d');
+      
+      if (trafficChart) {
+        trafficChart.destroy();
+      }
+
+      // ตัวอย่างข้อมูล Fallback หากไม่ได้ส่งมาจาก Worker
+      const labels = chartData?.labels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const pageviewData = chartData?.pageviews || [120, 190, 300, 250, 420, 310, 450];
+      const visitorData = chartData?.visitors || [80, 110, 210, 180, 290, 200, 320];
+
+      trafficChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Pageviews',
+              data: pageviewData,
+              borderColor: '#818cf8',
+              backgroundColor: 'rgba(129, 140, 248, 0.1)',
+              fill: true,
+              tension: 0.3
+            },
+            {
+              label: 'Visitors',
+              data: visitorData,
+              borderColor: '#34d399',
+              backgroundColor: 'rgba(52, 211, 153, 0.1)',
+              fill: true,
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#94a3b8' } }
+          },
+          scales: {
+            x: { ticks: { color: '#64748b' }, grid: { color: '#334155' } },
+            y: { ticks: { color: '#64748b' }, grid: { color: '#334155' } }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
